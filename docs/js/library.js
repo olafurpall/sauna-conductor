@@ -1,11 +1,11 @@
 // Sessions library: saved sessions, import/export, and the Claude playlist workflow.
-import { $, h, toast, fmt, fmtDur, fmtDate, fmtSong, download, pickFile, slug, store } from './util.js?v=2.4-c175b092';
-import { liveView, interruptedRun, discardRun, HISTORY_KEY } from './live.js?v=2.4-c175b092';
-import { app } from './app.js?v=2.4-c175b092';
-import * as db from './db.js?v=2.4-c175b092';
-import * as S from './sessions.js?v=2.4-c175b092';
-import { auth, exportLibrary, importPlan, openUrl } from './spotify.js?v=2.4-c175b092';
-import { eleven } from './eleven.js?v=2.4-c175b092';
+import { $, h, toast, fmt, fmtDur, fmtDate, fmtSong, download, pickFile, slug, store } from './util.js?v=2.4-5089199b';
+import { liveView, interruptedRun, discardRun, HISTORY_KEY } from './live.js?v=2.4-5089199b';
+import { app } from './app.js?v=2.4-5089199b';
+import * as db from './db.js?v=2.4-5089199b';
+import * as S from './sessions.js?v=2.4-5089199b';
+import { auth, exportLibrary, importPlan, openUrl } from './spotify.js?v=2.4-5089199b';
+import { eleven } from './eleven.js?v=2.4-5089199b';
 
 const el = $('#view-library');
 

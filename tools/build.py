@@ -21,7 +21,8 @@ def main():
     out = (ROOT / a.out).resolve()
 
     vendor = sorted(p for p in (ROOT / 'js' / 'vendor').rglob('*') if p.is_file()) if (ROOT / 'js' / 'vendor').exists() else []
-    files = [ROOT / 'index.html'] + sorted((ROOT / 'css').rglob('*.css')) + sorted(p for p in (ROOT / 'js').rglob('*.js') if p not in vendor) + vendor
+    pages = [ROOT / 'index.html'] + [p for p in [ROOT / 'privacy.html'] if p.exists()]
+    files = pages + sorted((ROOT / 'css').rglob('*.css')) + sorted(p for p in (ROOT / 'js').rglob('*.js') if p not in vendor) + vendor
     h = hashlib.sha1()
     for f in files:
         h.update(f.relative_to(ROOT).as_posix().encode())
@@ -46,7 +47,7 @@ def main():
         text = f.read_text()
         if f.suffix == '.js':
             text = IMPORT_RE.sub(lambda m: f"{m.group(1)}{m.group(2)}{m.group(3)}?v={tag}{m.group(2)}", text)
-        elif f.name == 'index.html':
+        elif f.suffix == '.html':
             text = text.replace('href="css/app.css"', f'href="css/app.css?v={tag}"')
             text = text.replace('src="js/main.js"', f'src="js/main.js?v={tag}"')
         dst.write_text(text)

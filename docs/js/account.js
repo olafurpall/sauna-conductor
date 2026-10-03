@@ -1,7 +1,7 @@
 // Settings → Account and sync, and the sync pill in the header.
-import { $, h, toast } from './util.js?v=2.4-c175b092';
-import { app } from './app.js?v=2.4-c175b092';
-import { cloud, signInWithGoogle, signInWithEmail, signOut, syncAll, invite, cancelInvite, removeMember, switchWorkspace, renameWorkspace } from './cloud.js?v=2.4-c175b092';
+import { $, h, toast } from './util.js?v=2.4-5089199b';
+import { app } from './app.js?v=2.4-5089199b';
+import { cloud, signInWithGoogle, signInWithEmail, signOut, syncAll, invite, cancelInvite, removeMember, switchWorkspace, renameWorkspace } from './cloud.js?v=2.4-5089199b';
 
 let isRunning = () => false;
 

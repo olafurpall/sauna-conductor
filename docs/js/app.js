@@ -1,5 +1,5 @@
 // App-wide config, view router and a tiny event bus.
-import { store } from './util.js?v=2.4-c175b092';
+import { store } from './util.js?v=2.4-5089199b';
 
 export const VERSION = '2.4';
 

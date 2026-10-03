@@ -1,10 +1,10 @@
 // Live view: runs a saved session — clock, music phases, narration and song controls.
-import { $, $$, h, sleep, clamp, now, fmt, fmtSong, toast, log, store, uid } from './util.js?v=2.4-c175b092';
-import { app, cfg } from './app.js?v=2.4-c175b092';
-import * as db from './db.js?v=2.4-c175b092';
-import * as S from './sessions.js?v=2.4-c175b092';
-import { cueForRound } from './script.js?v=2.4-c175b092';
-import { player, auth } from './spotify.js?v=2.4-c175b092';
+import { $, $$, h, sleep, clamp, now, fmt, fmtSong, toast, log, store, uid } from './util.js?v=2.4-5089199b';
+import { app, cfg } from './app.js?v=2.4-5089199b';
+import * as db from './db.js?v=2.4-5089199b';
+import * as S from './sessions.js?v=2.4-5089199b';
+import { cueForRound } from './script.js?v=2.4-5089199b';
+import { player, auth } from './spotify.js?v=2.4-5089199b';
 
 const el = $('#view-live');
 let sess = null;          // loaded session

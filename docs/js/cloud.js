@@ -1,11 +1,11 @@
 // Cloud sync (Supabase): sign-in, a workspace shared with others, and syncing of
 // sessions, recorded narration, run history, the ElevenLabs key and your Spotify login.
 // The browser's own storage stays the working copy, so everything keeps working offline.
-import { SUPABASE_URL, SUPABASE_KEY } from './config.js?v=2.4-c175b092';
-import { app } from './app.js?v=2.4-c175b092';
-import { store, log, toast, sleep } from './util.js?v=2.4-c175b092';
-import * as db from './db.js?v=2.4-c175b092';
-import { eleven } from './eleven.js?v=2.4-c175b092';
+import { SUPABASE_URL, SUPABASE_KEY } from './config.js?v=2.4-5089199b';
+import { app } from './app.js?v=2.4-5089199b';
+import { store, log, toast, sleep } from './util.js?v=2.4-5089199b';
+import * as db from './db.js?v=2.4-5089199b';
+import { eleven } from './eleven.js?v=2.4-5089199b';
 
 const Q = { quiet: true };            // local writes made by sync must not trigger another upload
 const BUCKET = 'clips';
