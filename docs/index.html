@@ -1,0 +1,235 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Sauna Conductor</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@400;500;600&family=IBM+Plex+Mono:wght@200;300;400&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="css/app.css?v=2.4-c175b092">
+</head>
+<body class="phase-idle">
+<div class="sky" aria-hidden="true"></div>
+
+<header class="top">
+  <div class="brand">Sauna <span>Conductor</span></div>
+  <nav class="tabs" aria-label="Views">
+    <button class="tab" data-view="library">Sessions</button>
+    <button class="tab" data-view="live" id="tabLive" disabled>Live</button>
+  </nav>
+  <div class="spacer"></div>
+  <button class="pill" id="pillCloud" data-sec="set-account" hidden>Sign in</button>
+  <button class="pill" id="pillSpotify" data-sec="set-spotify">Spotify</button>
+  <button class="pill" id="pillEleven" data-sec="set-eleven">ElevenLabs</button>
+  <button class="ghost small" id="btnSettings">Settings</button>
+</header>
+
+<div class="banner" id="storageBanner" hidden>
+  <b>Sauna Conductor is also open in another Chrome tab.</b> That tab is holding on to your saved sessions, so this one can't save. Close the other Sauna Conductor tabs, then reload this one with Cmd+Shift+R.
+</div>
+<div class="banner" id="fileBanner" hidden>
+  You opened <b>index.html</b> directly. Close this tab and double-click <b>Start Sauna Conductor.command</b> instead. The app only works through the launcher.
+</div>
+
+<!-- ============================================================ Sessions -->
+<section class="view" id="view-library" hidden>
+  <div class="lib-head">
+    <div>
+      <h1>Sessions</h1>
+      <p class="muted">Each session keeps its playlists, timing, voice and recorded narration, so you can replay it exactly.</p>
+    </div>
+    <div class="row">
+      <button id="btnImportSession">Import session</button>
+      <button class="primary" id="btnNewSession">New session</button>
+    </div>
+  </div>
+  <div class="banner warn" id="libBanner" hidden></div>
+  <div class="banner resume" id="resumeBanner" hidden></div>
+  <div class="cards" id="sessionCards"></div>
+
+  <section class="card history" id="historyCard" hidden>
+    <div class="label">Recent sessions</div>
+    <ol class="hist" id="historyList"></ol>
+  </section>
+
+  <section class="card tools">
+    <div>
+      <div class="label">Playlists with Claude</div>
+      <p class="muted">Export your Spotify library to a file and send it to Claude in chat. Claude sends back a playlist file, and importing it here creates those playlists in your Spotify.</p>
+      <p class="muted small" id="toolStatus"></p>
+    </div>
+    <div class="row">
+      <button id="btnExportLibrary">Export my Spotify library</button>
+      <button id="btnImportPlan">Import playlists from Claude</button>
+    </div>
+  </section>
+</section>
+
+<!-- ============================================================ Editor -->
+<section class="view" id="view-editor" hidden></section>
+
+<!-- ============================================================ Live -->
+<section class="view" id="view-live" hidden>
+  <div class="live-grid">
+    <section class="stage">
+      <div class="kicker" id="kicker">Ready for launch</div>
+      <div class="ring-wrap">
+        <div class="ring-glow" aria-hidden="true"></div>
+        <svg class="ring" viewBox="0 0 400 400" aria-hidden="true">
+          <circle class="track" cx="200" cy="200" r="186"></circle>
+          <circle class="prog" id="ringProg" cx="200" cy="200" r="186"></circle>
+        </svg>
+        <div class="ring-center">
+          <div class="title" id="title">4 rounds · 15 min</div>
+          <div class="theme" id="theme"></div>
+          <div class="timer" id="timer">15:00</div>
+          <div class="sub" id="sub">Press Start when everyone is seated</div>
+        </div>
+      </div>
+      <div class="timeline" id="timeline"></div>
+      <div class="seg-labels" id="segLabels"></div>
+    </section>
+
+    <aside class="side">
+      <div class="card np">
+        <div class="label">Now playing</div>
+        <div class="np-row">
+          <div class="np-art" id="npArtWrap"><img id="npArt" alt=""></div>
+          <div class="np-meta">
+            <div class="np-track" id="npTrack">—</div>
+            <div class="np-artist" id="npArtist"></div>
+          </div>
+        </div>
+        <div class="np-prog" aria-hidden="true"><i id="npProg"></i></div>
+        <div class="np-times"><span id="npPos">0:00</span><span id="npDur">0:00</span></div>
+        <div class="transport">
+          <button class="icon" id="btnPrevSong" aria-label="Previous song" title="Previous song">
+            <svg viewBox="0 0 24 24"><path d="M6 5h2v14H6zM20 5v14L9 12z"/></svg>
+          </button>
+          <button class="icon big" id="btnMusic" aria-label="Pause music" title="Pause or play the music only">
+            <svg viewBox="0 0 24 24" class="i-pause"><path d="M7 5h4v14H7zM13 5h4v14h-4z"/></svg>
+            <svg viewBox="0 0 24 24" class="i-play"><path d="M8 5v14l11-7z"/></svg>
+          </button>
+          <button class="icon" id="btnNextSong" aria-label="Next song" title="Next song">
+            <svg viewBox="0 0 24 24"><path d="M16 5h2v14h-2zM4 5v14l11-7z"/></svg>
+          </button>
+        </div>
+        <div class="meter-row"><span>Music level</span><span id="meterVal">0%</span></div>
+        <div class="meter"><i id="meterFill"></i></div>
+      </div>
+      <div class="card">
+        <div class="label">Up next</div>
+        <ol class="upnext" id="upNext"></ol>
+      </div>
+      <div class="card" id="narrCard">
+        <div class="label">Narrator</div>
+        <div class="narr-line"><span class="wave" aria-hidden="true"><b></b><b></b><b></b><b></b></span><span id="narrText">Quiet</span></div>
+        <div class="narr-when" id="narrWhen"></div>
+      </div>
+      <div class="card">
+        <div class="label">Session</div>
+        <div class="sess-name" id="liveName">—</div>
+        <div class="total" id="total">Not started</div>
+      </div>
+    </aside>
+  </div>
+
+  <footer class="controls">
+    <button class="primary" id="btnResume" hidden>Resume</button>
+    <button class="primary" id="btnStart">Start session</button>
+    <button id="btnPause" disabled>Pause</button>
+    <button id="btnNext" disabled>Next phase</button>
+    <button id="btnExtend" disabled>+1 min</button>
+    <button id="btnReplay" disabled>Replay narration</button>
+    <button class="danger" id="btnStop" disabled>End session</button>
+  </footer>
+  <div class="hint"><kbd>Space</kbd> pause · <kbd>N</kbd> next phase · <kbd>→</kbd> next song · <kbd>+</kbd> add a minute · <kbd>R</kbd> replay narration</div>
+</section>
+
+<!-- ============================================================ Settings -->
+<dialog id="settings">
+  <div class="set-head">
+    <h2>Settings</h2>
+    <span class="muted small" id="appVersion" style="margin-left:12px"></span>
+    <div class="spacer"></div>
+    <button class="small" id="btnCloseSettings">Done</button>
+  </div>
+  <div class="set-body">
+    <section class="set-sec" id="set-account" hidden>
+      <h3>Account and sync</h3>
+      <div id="acctOut" hidden>
+        <p class="help">Sign in to keep your sessions, recorded narration, history and the ElevenLabs key in the cloud: on any computer, and shared with the people you invite.</p>
+        <div class="row"><button class="small primary" id="btnGoogle">Continue with Google</button></div>
+        <div class="row mt"><input type="email" id="acctEmail" placeholder="you@example.com" autocomplete="email" spellcheck="false"><button class="small" id="btnEmailLink">Email me a sign-in link</button></div>
+        <p class="muted small mt" id="acctMsg"></p>
+      </div>
+      <div id="acctIn" hidden>
+        <div class="row"><span>Signed in as <b id="acctWho"></b></span><span class="chip" id="acctStatus"></span></div>
+        <div class="grid2 mt">
+          <label class="f">Workspace<select id="acctWs"></select></label>
+          <label class="f">Workspace name<input type="text" id="acctWsName" maxlength="40" spellcheck="false"></label>
+        </div>
+        <div class="label mt">Shared with</div>
+        <ul class="people" id="acctPeople"></ul>
+        <div class="row mt"><input type="email" id="inviteEmail" placeholder="their Gmail address" autocomplete="off" spellcheck="false"><button class="small" id="btnInvite">Invite</button></div>
+        <p class="help mt">They open this page, sign in with that email address, and see everything in the workspace: sessions, recordings, history and the ElevenLabs key. Everyone connects their own Spotify.</p>
+        <div class="row"><button class="small" id="btnSyncNow">Sync now</button><button class="small ghost" id="btnSignOut">Sign out</button><span class="muted small" id="acctLast"></span></div>
+      </div>
+    </section>
+
+    <section class="set-sec" id="set-spotify">
+      <h3>Spotify</h3>
+      <p class="help">Each person connects their own Spotify account (Premium). The account must also be on the user list of the Spotify developer app (see README). When you're signed in, your Spotify login is saved in your account, so other computers don't need to connect again.</p>
+      <div class="grid2">
+        <label class="f">Client ID (from your Spotify app)<input type="text" id="cfgClientId" autocomplete="off" spellcheck="false" placeholder="32-character Client ID"></label>
+        <div class="f">Redirect URI (copy this into Spotify)<div class="row"><span class="code" id="redirectUri"></span><button class="small" id="btnCopyRedirect">Copy</button></div></div>
+      </div>
+      <div class="row mt">
+        <button class="small primary" id="btnConnect">Connect Spotify</button>
+        <button class="small" id="btnDisconnect">Disconnect</button>
+        <span class="muted small" id="spDetail"></span>
+      </div>
+    </section>
+
+    <section class="set-sec" id="set-eleven">
+      <h3>ElevenLabs</h3>
+      <p class="help">Narration is recorded with your own ElevenLabs account. Create an API key at <b>elevenlabs.io → Developers → API keys</b> with access to <i>Text to Speech</i>, <i>Voices</i> (read and write), <i>Models</i> and <i>User</i> (read). Setting a credit limit on the key is a good idea. The key is stored in this browser and, when you're signed in, in your workspace so the people you share with can record too.</p>
+      <div class="grid2">
+        <label class="f">API key<input type="password" id="cfgElKey" autocomplete="off" spellcheck="false" placeholder="sk_…"></label>
+        <div class="f">&nbsp;<div class="row"><button class="small primary" id="btnElSave">Save and check</button><button class="small ghost" id="btnElShow">Show</button></div></div>
+      </div>
+      <p class="muted small mt" id="elDetail"></p>
+    </section>
+
+    <section class="set-sec" id="set-output">
+      <h3>Where the music plays</h3>
+      <label class="radio"><input type="radio" name="output" value="browser"> <span><b>This browser</b> — the conductor is the speaker. Connect the laptop to the sauna speaker. Songs blend with short fades.</span></label>
+      <label class="radio"><input type="radio" name="output" value="connect"> <span><b>Spotify app or speaker</b> — the conductor remote-controls a Spotify device, such as the Spotify app on this Mac. Turn on <i>Crossfade songs</i> in the Spotify app's settings for real DJ-style blends.</span></label>
+      <div class="row mt" id="deviceRow">
+        <select id="cfgDevice"><option value="">Choose a device…</option></select>
+        <button class="small" id="btnDevices">Refresh</button>
+        <span class="muted small">Open the Spotify app first so it shows up here.</span>
+      </div>
+    </section>
+
+    <section class="set-sec" id="set-other">
+      <h3>Rehearsal and fallback</h3>
+      <div class="grid2">
+        <label class="f">Clock speed<select id="cfgSpeed"><option value="1">Live (normal)</option><option value="20">Rehearsal ×20</option><option value="60">Rehearsal ×60</option></select></label>
+        <div class="f">&nbsp;<label class="chk"><input type="checkbox" id="cfgDemo"> Demo mode (no Spotify)</label></div>
+      </div>
+      <label class="chk mt"><input type="checkbox" id="cfgFallback"> If a narration clip is missing, read it with the browser's own voice (low quality)</label>
+      <div class="row mt"><button class="small" id="btnDiag">Copy diagnostics</button><span class="muted small">If something goes wrong during a session, paste this into the chat with Claude. It contains no passwords or keys.</span></div>
+    </section>
+  </div>
+</dialog>
+
+<div id="toast" role="status" aria-live="polite"></div>
+
+<script>
+  if (location.protocol === 'file:') document.getElementById('fileBanner').hidden = false;
+</script>
+<script type="module" src="js/main.js?v=2.4-c175b092"></script>
+</body>
+</html>
