@@ -146,11 +146,8 @@ The conductor saves where it is every two seconds (and, when signed in, reports 
 
 - **Hosting**: GitHub Pages from the `docs/` folder of <https://github.com/olafurpall/sauna-conductor>, at `sauna.roadtalk.io` (a CNAME record at IONOS points `sauna` to `olafurpall.github.io`). After changing the app, run `python3 tools/build.py --cname sauna.roadtalk.io` and push. The build adds a version to every file name so browsers never mix old and new files.
 - **Supabase** project *sauna-conductor* (organization Roadtalk). The schema and security rules are in `supabase/schema.sql` (safe to run again). The app's address and publishable key are in `js/config.js`.
-- **Google sign-in** (one-time):
-  1. <https://console.cloud.google.com> → create a project (e.g. *Sauna Conductor*).
-  2. **Google Auth Platform → Get started**: app name *Sauna Conductor*, your email, audience **External**.
-  3. **Clients → Create client → Web application**. Authorized JavaScript origins: `https://sauna.roadtalk.io`. Authorized redirect URI: `https://cldzrjlznhyswfzylxsl.supabase.co/auth/v1/callback`. Create, and keep the window with the Client ID and Client secret open.
-  4. **Audience → Publish app**, so anyone you invite can sign in with Google (only name and email are requested, so no review is needed).
-  5. Supabase → Authentication → Sign In / Providers → **Google** → enable, paste the Client ID and Client secret, Save.
+- **Google sign-in**: Google Cloud project *Sauna Conductor* (account olafurpall@gmail.com, separate from TARS) → Google Auth Platform: app *Sauna Conductor*, External, **In production**, web client *Web client 1* with redirect URI `https://cldzrjlznhyswfzylxsl.supabase.co/auth/v1/callback`. Its Client ID and secret are in Supabase → Authentication → Sign In / Providers → Google. If the secret is ever lost, add a new one under Google Auth Platform → Clients and paste it there.
+- **Spotify users**: Þóra (thora@munum.is) is on the app's User Management list. Spotify allows up to 5.
+- **Privacy page**: `privacy.html` (linked from the sign-in screen and Google's consent screen).
 - **Email links**: Supabase's built-in email only sends to members of the Supabase organization, a few per hour. For anyone else use Google, or set up your own email sender under Supabase → Authentication → Emails → SMTP.
 - **Who can sign up**: anyone who signs in gets their own empty workspace and can't see yours. To close the door completely, turn off *Allow new users to sign up* in Supabase → Authentication → Sign In / Providers once everyone has signed in once.
