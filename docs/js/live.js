@@ -1,10 +1,11 @@
 // Live view: runs a saved session — clock, music phases, narration and song controls.
-import { $, $$, h, sleep, clamp, now, fmt, fmtSong, toast, log, store, uid } from './util.js?v=2.4-5089199b';
-import { app, cfg } from './app.js?v=2.4-5089199b';
-import * as db from './db.js?v=2.4-5089199b';
-import * as S from './sessions.js?v=2.4-5089199b';
-import { cueForRound } from './script.js?v=2.4-5089199b';
-import { player, auth } from './spotify.js?v=2.4-5089199b';
+import { $, $$, h, sleep, clamp, now, fmt, fmtSong, toast, log, store, uid } from './util.js?v=2.5-6e8466df';
+import { app, cfg } from './app.js?v=2.5-6e8466df';
+import * as db from './db.js?v=2.5-6e8466df';
+import * as S from './sessions.js?v=2.5-6e8466df';
+import { cueForRound } from './script.js?v=2.5-6e8466df';
+import { player, auth } from './spotify.js?v=2.5-6e8466df';
+import { preview } from './preview.js?v=2.5-6e8466df';
 
 const el = $('#view-live');
 let sess = null;          // loaded session
@@ -232,7 +233,7 @@ function stopNarration() {
   renderNarr();
 }
 
-function playUrl(url) {
+function playUrl(url, volume) {
   return new Promise((resolve) => {
     const a = narr.audio;
     let settled = false;
@@ -241,7 +242,7 @@ function playUrl(url) {
     a.onerror = () => done('error');
     narr.stop = () => { a.pause(); done('stopped'); };
     a.src = url;
-    a.volume = clamp((sess.levels.narr ?? 100) / 100, 0, 1);
+    a.volume = clamp(volume ?? (sess.levels.narr ?? 100) / 100, 0, 1);
     narr.tts = false;
     a.play().catch(() => done('error'));
   });
@@ -295,7 +296,7 @@ async function narrate(id, tok) {
   narr.active = id; renderNarr();
   let result = 'none';
   if (clipUrls[id]) result = await playUrl(clipUrls[id]);
-  if ((result === 'none' || result === 'error') && cfg.fallbackVoice && tok === engine.token) result = await speak(sess.script[id] || '');
+  if ((result === 'none' || result === 'error') && cfg.fallbackVoice && tok === engine.token) result = await speak(S.cueText(sess, id));
   if (tok === engine.token) { narr.active = null; renderNarr(); }
   log('narrated', id, result);
   return result;
@@ -312,15 +313,33 @@ window.__sc = { engine, music, player, narr, get session() { return sess; } };
 function buildPlan() {
   const t = sess.timing, R = t.rounds;
   const songs = S.songMode(sess);
+  const breaks = S.breaksPlanned(sess);
+  // Messages inside songs go with the phase where their song plays.
+  const inserts = {};
+  for (const ins of sess.inserts || []) {
+    const at = songs && S.findSong(sess, ins.uri);
+    if (at) (inserts[at.phase.key] = inserts[at.phase.key] || []).push({ ...ins, done: false });
+  }
   const plan = [];
   for (let r = 1; r <= R; r++) {
     const tracks = songs ? sess.plan.rounds[r - 1].map((x) => ({ ...x })) : null;
     const theme = (sess.plan && sess.plan.themes && sess.plan.themes[r - 1]) || '';
-    plan.push({ type: 'round', n: r, of: R, durMs: songs ? S.sumMs(tracks) : t.roundMin * 60000, tracks, theme, cue: cueForRound(r, R) });
-    if (r < R) plan.push({ type: 'break', n: r, of: R, durMs: t.breakMin * 60000, cue: 'end' + r });
+    plan.push({ type: 'round', n: r, of: R, durMs: songs ? S.sumMs(tracks) : t.roundMin * 60000, tracks, theme, cue: cueForRound(r, R), inserts: inserts['r' + r] || [] });
+    if (r < R) {
+      const b = { type: 'break', n: r, of: R, durMs: t.breakMin * 60000, cue: 'end' + r, inserts: inserts['b' + r] || [] };
+      if (breaks) b.planned = sess.plan.breaks[r - 1].map((x) => ({ ...x }));
+      plan.push(b);
+    }
   }
-  plan.push({ type: 'closing', durMs: null, cue: 'closing' });
+  plan.push({ type: 'closing', durMs: null, cue: 'closing', planned: breaks ? [] : null, inserts: [] });
   return plan;
+}
+
+// Songs left over for the cool-downs and the closing (planned songs come first, then these).
+function coolRest() {
+  if (!S.breaksPlanned(sess)) return [];
+  const rest = sess.plan.coolSource ? sess.plan.coolPool || [] : sess.plan.pool || [];
+  return rest.filter((x) => !extraUsed.has(x.uri));
 }
 
 const phase = () => engine.plan[engine.idx];
@@ -386,8 +405,9 @@ function resetRunState() {
 async function startSession() {
   if (engine.running || !sess) return;
   unlockAudio();   // inside the click, before any waiting
+  preview.stop();
   if (!(await readyToPlay())) return;
-  const missing = engine.plan.filter((p) => !clipOk[p.cue]).length;
+  const missing = engine.plan.filter((p) => !clipOk[p.cue]).length + (sess.inserts || []).filter((x) => !clipOk[S.insertCue(x)]).length;
   if (missing && !confirm(`${missing} narration message${missing > 1 ? 's are' : ' is'} not recorded (or out of date). ${cfg.fallbackVoice ? 'They will be read by the browser voice.' : 'They will be skipped.'} Start anyway?`)) return;
   requestWakeLock();
   engine.plan = buildPlan();
@@ -405,6 +425,7 @@ async function startSession() {
 async function resumeSession(r) {
   if (engine.running || !sess) return;
   unlockAudio();
+  preview.stop();
   if (!(await readyToPlay())) return;
   requestWakeLock();
   engine.plan = buildPlan();
@@ -446,6 +467,12 @@ async function enterPhase(i, resumeRun) {
     // under the narrator. The narration starts straight away, at full volume.
     const musicJob = (async () => {
       if (isRound && p.tracks) await startSet(p, tok, startLevel);
+      else if (!isRound && p.planned && (p.planned.length || coolRest().length)) {
+        // The planned cool-down songs, then the rest of the cool-down songs so the music never runs out.
+        const rest = coolRest().filter((x) => !p.planned.some((y) => y.uri === x.uri));
+        p.list = [...p.planned, ...rest].slice(0, 60).map((x) => ({ ...x }));
+        await startList(p.list, tok, startLevel);
+      }
       else if (!isRound && S.songMode(sess) && !sess.music.cool && sess.plan.pool.some((x) => !extraUsed.has(x.uri))) {
         p.list = sess.plan.pool.filter((x) => !extraUsed.has(x.uri));   // unused songs, minus any played with "+1 song"
         await startList(p.list, tok, startLevel);
@@ -556,7 +583,7 @@ function saveRun(force) {
 export function addHistory(entry) {
   const list = store.get(HISTORY_KEY, []).filter((x) => x.runId !== entry.runId);
   list.unshift(entry);
-  store.set(HISTORY_KEY, list.slice(0, 30));
+  store.set(HISTORY_KEY, list.slice(0, 200));
   app.emit('history-add', entry);
 }
 
@@ -617,10 +644,55 @@ function tick() {
       } else { advance(); return; }
     }
   }
+  if (p && !engine.paused) checkInserts(p);
   songTransitions();
   if (app.current === 'live') { render(); renderSong(); }
 }
 setInterval(tick, 200);
+
+// ---------------------------------------------------------------- messages inside songs
+// A message plays when its song reaches its spot: the music dips to the message's level,
+// the narrator speaks at the message's volume, and the music comes back up afterwards.
+let insertBusy = false;
+function checkInserts(p) {
+  if (!p.inserts || !p.inserts.length || !p.musicOn || !music.live) return;
+  const cur = player.current;
+  if (!cur || player.paused) return;
+  const pos = player.position();
+  for (const ins of p.inserts) {
+    if (cur.uri !== ins.uri) continue;
+    if (ins.done) { if (!insertBusy && pos < ins.atMs - 3000) ins.done = false; continue; }   // went back before it: play it again
+    if (pos < ins.atMs) continue;
+    if (pos > ins.atMs + 20000) { ins.done = true; log('insert-skipped', ins.id); continue; }   // skipped past it
+    if (narr.active || insertBusy) return;                                                       // let the narrator finish first
+    ins.done = true;
+    playInsert(p, ins);
+    return;
+  }
+}
+
+async function playInsert(p, ins) {
+  const id = S.insertCue(ins);
+  if (!clipUrls[id] && !cfg.fallbackVoice) { log('insert-missing', id); return; }
+  const tok = engine.token;
+  insertBusy = true;
+  const target = (p.type === 'round' ? sess.levels.heat : sess.levels.cool) / 100;
+  const duck = (ins.duck ?? sess.levels.duck) / 100;
+  const vol = (ins.narr ?? sess.levels.narr ?? 100) / 100;
+  log('insert', id, Math.round(player.position() / 1000));
+  try {
+    await music.fadeTo(target * duck, 1200, tok);
+    if (tok === engine.token) {
+      narr.active = id; renderNarr();
+      let r = clipUrls[id] ? await playUrl(clipUrls[id], vol) : 'none';
+      if ((r === 'none' || r === 'error') && cfg.fallbackVoice && tok === engine.token) r = await speak(S.cueText(sess, id));
+      if (tok === engine.token) { narr.active = null; renderNarr(); }
+      log('insert-done', id, r);
+    }
+    await waitWhilePaused(tok);
+    if (tok === engine.token && narr.owner !== 'replay') await music.fadeTo(target, 2000, tok);
+  } finally { insertBusy = false; }
+}
 
 // ---------------------------------------------------------------- music controls
 async function musicToggle() {

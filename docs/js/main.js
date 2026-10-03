@@ -1,23 +1,30 @@
 // Boot: settings dialog, status pills, migration from v1, first view.
-import { $, $$, h, toast, uid, sleep, diagnostics } from './util.js?v=2.4-5089199b';
-import { app, cfg, saveCfg, legacyCfg, VERSION } from './app.js?v=2.4-5089199b';
-import * as db from './db.js?v=2.4-5089199b';
-import * as S from './sessions.js?v=2.4-5089199b';
-import { auth, login, logout, adoptLogin, handleRedirect, redirectUri, player, listDevices, parseUri } from './spotify.js?v=2.4-5089199b';
-import { eleven } from './eleven.js?v=2.4-5089199b';
-import { libraryView } from './library.js?v=2.4-5089199b';
-import { editorView } from './editor.js?v=2.4-5089199b';
-import { liveView } from './live.js?v=2.4-5089199b';
-import { cloud, initCloud, pushElevenKey, cloudSummary } from './cloud.js?v=2.4-5089199b';
-import { initAccount, paintAccount } from './account.js?v=2.4-5089199b';
+import { $, $$, h, toast, uid, sleep, diagnostics } from './util.js?v=2.5-6e8466df';
+import { app, cfg, saveCfg, legacyCfg, VERSION } from './app.js?v=2.5-6e8466df';
+import * as db from './db.js?v=2.5-6e8466df';
+import * as S from './sessions.js?v=2.5-6e8466df';
+import { auth, login, logout, adoptLogin, handleRedirect, redirectUri, player, listDevices, parseUri } from './spotify.js?v=2.5-6e8466df';
+import { eleven } from './eleven.js?v=2.5-6e8466df';
+import { libraryView } from './library.js?v=2.5-6e8466df';
+import { editorView } from './editor.js?v=2.5-6e8466df';
+import { liveView } from './live.js?v=2.5-6e8466df';
+import { sessionView } from './overview.js?v=2.5-6e8466df';
+import { timelineView } from './timeline.js?v=2.5-6e8466df';
+import { preview } from './preview.js?v=2.5-6e8466df';
+import { cloud, initCloud, pushElevenKey, cloudSummary } from './cloud.js?v=2.5-6e8466df';
+import { initAccount, paintAccount } from './account.js?v=2.5-6e8466df';
 
 app.register('library', libraryView);
 app.register('editor', editorView);
 app.register('live', liveView);
+app.register('session', sessionView);
+app.register('timeline', timelineView);
+preview.isRunning = () => liveView.running;
 
 // ---------------------------------------------------------------- header
 $$('.tab').forEach((t) => t.addEventListener('click', () => app.show(t.dataset.view)));
-app.on('view', (v) => $$('.tab').forEach((t) => t.classList.toggle('active', t.dataset.view === v || (v === 'editor' && t.dataset.view === 'library'))));
+app.on('view', (v) => $$('.tab').forEach((t) => t.classList.toggle('active', t.dataset.view === v || (['editor', 'session', 'timeline'].includes(v) && t.dataset.view === 'library'))));
+app.on('view', (v) => { if (v === 'live' || v === 'library') preview.stop(); });
 $$('.pill').forEach((p) => p.addEventListener('click', () => app.openSettings(p.dataset.sec)));
 
 function renderPills() {

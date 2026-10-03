@@ -1,5 +1,5 @@
 // ElevenLabs: voices, voice library, models and text-to-speech, called with the user's own API key.
-import { store, hash } from './util.js?v=2.4-5089199b';
+import { store, hash } from './util.js?v=2.5-6e8466df';
 
 const BASE = 'https://api.elevenlabs.io';
 

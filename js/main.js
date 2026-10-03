@@ -8,16 +8,23 @@ import { eleven } from './eleven.js';
 import { libraryView } from './library.js';
 import { editorView } from './editor.js';
 import { liveView } from './live.js';
+import { sessionView } from './overview.js';
+import { timelineView } from './timeline.js';
+import { preview } from './preview.js';
 import { cloud, initCloud, pushElevenKey, cloudSummary } from './cloud.js';
 import { initAccount, paintAccount } from './account.js';
 
 app.register('library', libraryView);
 app.register('editor', editorView);
 app.register('live', liveView);
+app.register('session', sessionView);
+app.register('timeline', timelineView);
+preview.isRunning = () => liveView.running;
 
 // ---------------------------------------------------------------- header
 $$('.tab').forEach((t) => t.addEventListener('click', () => app.show(t.dataset.view)));
-app.on('view', (v) => $$('.tab').forEach((t) => t.classList.toggle('active', t.dataset.view === v || (v === 'editor' && t.dataset.view === 'library'))));
+app.on('view', (v) => $$('.tab').forEach((t) => t.classList.toggle('active', t.dataset.view === v || (['editor', 'session', 'timeline'].includes(v) && t.dataset.view === 'library'))));
+app.on('view', (v) => { if (v === 'live' || v === 'library') preview.stop(); });
 $$('.pill').forEach((p) => p.addEventListener('click', () => app.openSettings(p.dataset.sec)));
 
 function renderPills() {

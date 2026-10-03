@@ -312,6 +312,13 @@ export async function importPlan(plan, onProgress = () => {}) {
   return made;
 }
 
+// Search the whole Spotify catalogue for songs. Development-mode apps get at most 10 results per page.
+export async function searchTracks(q, offset = 0) {
+  const j = await api('GET', `/search?type=track&limit=10&offset=${offset}&q=${encodeURIComponent(q)}`);
+  const tr = (j && j.tracks) || {};
+  return { items: (tr.items || []).map(normTrack).filter(Boolean), more: !!tr.next, offset: offset + (tr.items || []).length };
+}
+
 export async function listDevices() {
   const j = await api('GET', '/me/player/devices');
   return (j && j.devices) || [];
@@ -515,6 +522,13 @@ export const player = {
     api('PUT', '/me/player/repeat' + this.q() + '&state=off').catch(() => {});
     api('PUT', '/me/player/shuffle' + this.q() + '&state=false').catch(() => {});
     this.freshQueue();
+  },
+  async seek(ms) {
+    ms = Math.max(0, Math.round(ms));
+    if (this.mode === 'browser' && this.sdk) await this.sdk.seek(ms).catch(() => {});
+    else await api('PUT', '/me/player/seek' + this.q() + '&position_ms=' + ms).catch((e) => log('seek', e.message));
+    this.pos = ms; this.posAt = performance.now();
+    app.emit('playback');
   },
   async jumpTo(trackUri) {
     if (this.contextUri && this.contextUri.startsWith('uris:') && this.uris) {

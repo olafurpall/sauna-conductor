@@ -1,11 +1,12 @@
 // Sessions library: saved sessions, import/export, and the Claude playlist workflow.
-import { $, h, toast, fmt, fmtDur, fmtDate, fmtSong, download, pickFile, slug, store } from './util.js?v=2.4-5089199b';
-import { liveView, interruptedRun, discardRun, HISTORY_KEY } from './live.js?v=2.4-5089199b';
-import { app } from './app.js?v=2.4-5089199b';
-import * as db from './db.js?v=2.4-5089199b';
-import * as S from './sessions.js?v=2.4-5089199b';
-import { auth, exportLibrary, importPlan, openUrl } from './spotify.js?v=2.4-5089199b';
-import { eleven } from './eleven.js?v=2.4-5089199b';
+import { $, h, toast, fmt, fmtDur, fmtDate, fmtSong, download, pickFile, slug, store } from './util.js?v=2.5-6e8466df';
+import { liveView, interruptedRun, discardRun, HISTORY_KEY } from './live.js?v=2.5-6e8466df';
+import { app } from './app.js?v=2.5-6e8466df';
+import * as db from './db.js?v=2.5-6e8466df';
+import * as S from './sessions.js?v=2.5-6e8466df';
+import { auth, exportLibrary, importPlan, openUrl } from './spotify.js?v=2.5-6e8466df';
+import { eleven } from './eleven.js?v=2.5-6e8466df';
+import { sharedWithMe } from './cloud.js?v=2.5-6e8466df';
 
 const el = $('#view-library');
 
@@ -65,6 +66,16 @@ export async function render() {
     return;
   }
   wrap.innerHTML = '';
+  $('#libSortRow').hidden = list.length < 2;
+  const by = store.get('libSort', 'changed');
+  const name = (s) => (s.name || '').toLocaleLowerCase();
+  const sorters = {
+    changed: (a, b) => (b.updatedAt || 0) - (a.updatedAt || 0),
+    plays: (a, b) => S.plays(b).n - S.plays(a).n || S.plays(b).last - S.plays(a).last,
+    played: (a, b) => S.plays(b).last - S.plays(a).last,
+    name: (a, b) => name(a).localeCompare(name(b)),
+  };
+  list.sort(sorters[by] || sorters.changed);
   if (!list.length) {
     wrap.append(h('div', { class: 'empty' },
       h('h3', {}, 'No sessions yet'),
@@ -93,6 +104,9 @@ app.on('eleven', () => { if (app.current === 'library') banner(); });
 
 async function card(s) {
   const r = await S.readiness(s);
+  const pl = S.plays(s);
+  const shared = sharedWithMe(s.id);
+  const open = () => app.show('session', s.id);
   const t = s.timing, m = s.music;
   const status = r.ok === r.total ? h('span', { class: 'chip ok' }, `Narration ready · ${r.total} messages`)
     : r.ok === 0 ? h('span', { class: 'chip warn' }, 'Narration not recorded yet')
@@ -100,14 +114,19 @@ async function card(s) {
   const art = h('div', { class: 'scard-art' },
     m.heat && m.heat.image ? h('img', { src: m.heat.image, alt: '' }) : null,
     m.cool && m.cool.image ? h('img', { src: m.cool.image, alt: '' }) : null);
-  const body = h('div', { class: 'scard-body' },
-    h('h3', {}, s.name),
+  const body = h('div', { class: 'scard-body', role: 'button', tabindex: '0', title: 'Open this session', onclick: open, onkeydown: (e) => { if (e.key === 'Enter') open(); } },
+    h('h3', {}, s.name || 'Untitled session'),
+    s.notes ? h('div', { class: 'notes' }, s.notes) : null,
     S.songMode(s)
       ? h('div', { class: 'meta' }, `${t.rounds} rounds: `, h('b', {}, s.plan.rounds.map((r) => fmtSong(S.sumMs(r))).join(' · ')), ` · ${t.breakMin} min cool-downs · ${fmtDur(S.totalMs(s))}`)
       : h('div', { class: 'meta' }, `${t.rounds} × ${t.roundMin} min · ${t.breakMin} min cool-downs · ${fmtDur(S.totalMs(s))}`),
     h('div', { class: 'meta' }, 'Heat: ', h('b', {}, m.heat ? m.heat.name : 'not chosen'), m.cool ? [' · Cool-down: ', h('b', {}, m.cool.name)] : null),
     h('div', { class: 'meta' }, 'Voice: ', h('b', {}, s.voice.name), ` · ${s.voice.modelId.replace(/_/g, ' ')}`),
-    h('div', { class: 'meta', style: { marginTop: '8px' } }, status, s.lastRunAt ? h('span', { class: 'muted small', style: { marginLeft: '8px' } }, 'Last run ' + fmtDate(s.lastRunAt)) : null));
+    h('div', { class: 'meta', style: { marginTop: '8px' } }, status, s.lastRunAt ? h('span', { class: 'muted small', style: { marginLeft: '8px' } }, 'Last run ' + fmtDate(s.lastRunAt)) : null),
+    h('div', { class: 'meta row', style: { marginTop: '6px' } },
+      h('span', { class: 'chip' + (pl.n ? ' ok' : '') }, pl.n === 1 ? '▶ 1 play' : `▶ ${pl.n} plays`),
+      (s.inserts || []).length ? h('span', { class: 'chip' }, `${s.inserts.length} message${s.inserts.length === 1 ? '' : 's'} in songs`) : null,
+      shared ? h('span', { class: 'chip info' }, `Shared by ${shared.by}`) : null));
   const foot = h('div', { class: 'scard-foot' },
     h('button', { class: 'primary small', onclick: () => app.show('live', s.id) }, 'Run'),
     h('button', { class: 'small', onclick: () => app.show('editor', s.id) }, 'Edit'),
@@ -115,9 +134,9 @@ async function card(s) {
     h('button', { class: 'small ghost', onclick: async () => { await S.duplicate(s); toast('Duplicated.'); render(); } }, 'Duplicate'),
     h('button', { class: 'small ghost', onclick: () => exportSession(s) }, 'Export'),
     h('button', { class: 'small ghost danger', onclick: async () => {
-      if (!confirm(`Delete “${s.name}” and its recorded narration?`)) return;
-      await S.remove(s); toast('Deleted.'); render();
-    } }, 'Delete'));
+      if (!confirm(shared ? `Remove “${s.name}” from your sessions? It stays with ${shared.by}.` : `Delete “${s.name}” and its recorded narration?`)) return;
+      await S.remove(s); toast(shared ? 'Removed.' : 'Deleted.'); render();
+    } }, shared ? 'Remove' : 'Delete'));
   return h('article', { class: 'scard' }, art, body, foot);
 }
 
@@ -130,6 +149,9 @@ async function exportSession(s) {
 }
 
 $('#btnNewSession').addEventListener('click', () => app.show('editor'));
+$('#libSort').value = store.get('libSort', 'changed');
+$('#libSort').addEventListener('change', (e) => { store.set('libSort', e.target.value); render(); });
+app.on('plays', () => { if (app.current === 'library') render(); });
 $('#btnImportSession').addEventListener('click', async () => {
   const [f] = await pickFile('.json,application/json');
   if (!f) return;

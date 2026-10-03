@@ -1,8 +1,8 @@
 // Session model: everything needed to replay a sauna session exactly.
-import { uid, blobToBase64, base64ToBlob } from './util.js?v=2.4-5089199b';
-import { cuePlan, defaultScript, defaultText } from './script.js?v=2.4-5089199b';
-import { clipKey } from './eleven.js?v=2.4-5089199b';
-import * as db from './db.js?v=2.4-5089199b';
+import { uid, blobToBase64, base64ToBlob, fmtSong, store } from './util.js?v=2.5-6e8466df';
+import { cuePlan, defaultScript, defaultText } from './script.js?v=2.5-6e8466df';
+import { clipKey } from './eleven.js?v=2.5-6e8466df';
+import * as db from './db.js?v=2.5-6e8466df';
 
 export const DEFAULT_VOICE = {
   id: 'xuiKYsOhCzCAyIdb1aX3', name: 'Clint Brooks',
@@ -14,12 +14,14 @@ export const DEFAULT_VOICE = {
 export function newSession(over = {}) {
   const t = Date.now();
   const s = {
-    id: uid(), name: 'New session', createdAt: t, updatedAt: t, lastRunAt: null,
+    id: uid(), name: '', notes: '', createdAt: t, updatedAt: t, lastRunAt: null,
     music: { heat: null, cool: null, shuffle: false, smooth: true, fadeSec: 6 },
     // mode 'songs': each round is a planned set of whole songs (roundMin = the length to aim for)
     // mode 'timed': each round lasts exactly roundMin minutes
     timing: { mode: 'songs', rounds: 4, roundMin: 15, minMin: 14, maxMin: 20, breakMin: 7, autoNext: true, keepOrder: true },
-    plan: null,   // { source, rounds: [[track…]…], pool: [track…], offset, seed, at }
+    plan: null,   // { source, rounds: [[track…]…], pool: [track…], offset, seed, at,
+                  //   breaks: [[track…]…] (one per cool-down), coolSource: uri or '' (= from pool), coolPool: [track…] }
+    inserts: [],  // messages placed inside songs: { id, text, uri, atMs, duck, narr }
     levels: { heat: 80, cool: 45, duck: 20, narr: 100 },
     voice: { ...DEFAULT_VOICE },
     script: defaultScript(4, 15),
@@ -59,8 +61,79 @@ export function totalMs(s) {
 
 export const cues = (s) => cuePlan(s.timing.rounds);
 
+// ---------------------------------------------------------------- songs per phase
+// Planned cool-down songs exist when the plan has one list per break.
+export const breaksPlanned = (s) => !!(songMode(s) && Array.isArray(s.plan.breaks) && s.plan.breaks.length === Math.max(0, s.timing.rounds - 1));
+// The pool that cool-down songs are swapped with / added from.
+export const coolPoolOf = (s) => (s.plan && s.plan.coolSource ? (s.plan.coolPool = s.plan.coolPool || []) : (s.plan ? s.plan.pool : []));
+
+// Every phase that plays a known list of songs, in session order.
+export function phaseLists(s) {
+  const out = [];
+  if (!songMode(s)) return out;
+  const R = s.timing.rounds, br = breaksPlanned(s);
+  for (let r = 1; r <= R; r++) {
+    out.push({ key: 'r' + r, type: 'round', n: r, label: r === R && R > 1 ? 'Final round' : `Round ${r}`, songs: s.plan.rounds[r - 1] });
+    if (r < R) out.push({ key: 'b' + r, type: 'break', n: r, label: `Cool-down ${r}`, songs: br ? s.plan.breaks[r - 1] : null, limitMs: s.timing.breakMin * 60000 });
+  }
+  return out;
+}
+
+// Where a song is in the session (the first place it appears).
+export function findSong(s, uri) {
+  for (const ph of phaseLists(s)) {
+    const k = (ph.songs || []).findIndex((t) => t.uri === uri);
+    if (k >= 0) return { phase: ph, k, song: ph.songs[k] };
+  }
+  return null;
+}
+
+// ---------------------------------------------------------------- messages inside songs
+export const insertCue = (ins) => 'x-' + ins.id;
+export const findInsert = (s, cueId) => (s.inserts || []).find((x) => insertCue(x) === cueId) || null;
+const short = (t, n = 46) => { const x = String(t || '').replace(/\[[^\]]*\]/g, '').replace(/\s+/g, ' ').trim(); return x.length > n ? x.slice(0, n - 1) + '…' : x || 'New message'; };
+export function insertWhen(s, ins) {
+  const at = findSong(s, ins.uri);
+  if (!at) return 'Not placed: its song is no longer in the session';
+  return `${at.phase.label} · in “${at.song.name}” at ${fmtSong(ins.atMs)}`;
+}
+export function newInsert(over = {}) {
+  return Object.assign({ id: uid().slice(0, 12), text: '', uri: '', atMs: 30000, duck: null, narr: null }, over);
+}
+// The text a cue reads: a phase message from the script, or a message placed in a song.
+export function cueText(s, cueId) {
+  if (String(cueId).startsWith('x-')) { const ins = findInsert(s, cueId); return ins ? ins.text || '' : ''; }
+  return (s.script && s.script[cueId]) || '';
+}
+// Phase messages plus messages placed in songs.
+export function allCues(s) {
+  return [...cues(s), ...(s.inserts || []).map((ins) => ({ id: insertCue(ins), title: 'Message: ' + short(ins.text), when: insertWhen(s, ins), insert: ins }))];
+}
+
+// ---------------------------------------------------------------- plays
+// Counted from this browser's run history; the cloud adds plays from other computers and people.
+export const countsAsPlay = (run) => run && (run.status === 'completed' || (run.elapsedMs || 0) >= 10 * 60000);
+export function localPlays() {
+  const out = {};
+  for (const r of store.get('runs', [])) {
+    if (!r.sessionId || !countsAsPlay(r)) continue;
+    const o = (out[r.sessionId] = out[r.sessionId] || { n: 0, last: 0 });
+    o.n++; o.last = Math.max(o.last, r.endedAt || r.startedAt || 0);
+  }
+  return out;
+}
+export function plays(s) {
+  const cloud = store.get('plays', {})[s.id];
+  const local = localPlays()[s.id];
+  const n = Math.max(cloud ? cloud.n : 0, local ? local.n : 0);
+  const last = Math.max(cloud ? cloud.last || 0 : 0, local ? local.last : 0, s.lastRunAt || 0);
+  return { n, last };
+}
+
 export function ensureScript(s) {
   ensureTiming(s);
+  if (!Array.isArray(s.inserts)) s.inserts = [];
+  if (typeof s.notes !== 'string') s.notes = '';
   for (const c of cues(s)) if (typeof s.script[c.id] !== 'string') s.script[c.id] = defaultText(c.id, s.timing.rounds, s.timing.roundMin);
   return s;
 }
@@ -69,12 +142,12 @@ export function ensureScript(s) {
 export function clipState(s, cueId, rec) {
   if (!rec || !rec.blob) return 'missing';
   if (rec.source === 'uploaded') return 'uploaded';
-  return rec.key === clipKey(s.script[cueId] || '', s.voice) ? 'ready' : 'outdated';
+  return rec.key === clipKey(cueText(s, cueId), s.voice) ? 'ready' : 'outdated';
 }
 
 export async function readiness(s) {
   const recs = await db.clips.forSession(s.id);
-  const list = cues(s).map((c) => ({ ...c, state: clipState(s, c.id, recs[c.id]) }));
+  const list = allCues(s).map((c) => ({ ...c, state: clipState(s, c.id, recs[c.id]) }));
   const ok = list.filter((c) => c.state === 'ready' || c.state === 'uploaded').length;
   return { list, ok, total: list.length, recs };
 }
@@ -105,7 +178,7 @@ export async function remove(s) {
 export async function exportFile(s) {
   const recs = await db.clips.forSession(s.id);
   const clips = {};
-  for (const c of cues(s)) {
+  for (const c of allCues(s)) {
     const r = recs[c.id];
     if (r && r.blob) clips[c.id] = { key: r.key, source: r.source, chars: r.chars, at: r.at, type: r.blob.type || 'audio/mpeg', data: await blobToBase64(r.blob) };
   }

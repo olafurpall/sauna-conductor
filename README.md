@@ -6,7 +6,8 @@ Runs a whole sauna session from one laptop: Spotify playlists, a recorded narrat
 - **Session creator**: pick playlists from your Spotify, edit every narration message, choose and preview an ElevenLabs voice, then record.
 - **Live view**: round timer, music that dips under the narrator, song controls (previous / pause / next), and an *Up next* list you can click to jump.
 - **Playlists with Claude**: export your Spotify library, send it to Claude, import the playlists Claude builds.
-- **Sign in and share**: your sessions, recordings, history and the ElevenLabs key follow you to any computer, and Thora sees the same ones.
+- **Sign in and share**: your sessions, recordings, history and the ElevenLabs key follow you to any computer, and Thora sees the same ones. Single sessions can be shared with collaborators too.
+- **Session page and timeline**: every session at a glance with play counts; preview any song; place extra messages anywhere, even in the middle of a song.
 
 **Open it at <https://sauna.roadtalk.io>** in Chrome on a computer.
 
@@ -54,27 +55,57 @@ Double-click **Start Sauna Conductor.command** (approve it once under System Set
 
 ---
 
+## The Sessions page
+
+- Each card shows the session's **name**, your **notes**, how long it is, whether the narration is recorded, and how many times it was **played** (▶). A play is a run that finished, or lasted at least 10 minutes. Plays count from every computer and every person who runs it.
+- **Sort by** Recently changed, Most played, Recently played or Name.
+- Click a card to open its **session page**.
+
+## The session page
+
+Everything about one session in order: each round and cool-down with its message (▶ plays the recording) and its songs (▶ previews a song), and any messages placed inside songs.
+
+- Click the **name** or the **notes** to change them.
+- **Run**, **Edit**, **Timeline**, **Share**, Duplicate, Export, Delete.
+- Each round and cool-down has its own **Edit**, which opens the editor at that part.
+
 ## Creating a session
 
-**Sessions → New session**, then:
+**Sessions → New session**, then name it (the cursor starts in the name box) and add notes if you like. The links under the name jump to each part: Music, Rounds, Cool-downs, Voice, Narration, Levels. Then:
 
 1. **Music**: choose the heat playlist and, optionally, a cool-down playlist from your Spotify. You can also paste a playlist link. Turn on *Fade between songs* for softer song changes.
 2. **Rounds**: choose how a round's length is decided.
    - **Follow the songs** (default): the conductor splits the heat playlist into rounds of whole songs: 3–6 songs per round, between the *shortest* and *longest* length (14–20 min by default), as close to the *aim* (15 min) as possible. You see every round's songs and its exact length (e.g. Round 1 · 16:32). **Suggest again** gives the next set of songs. Untick *Keep the playlist's song order* to mix freely. During the session each round plays exactly those songs and ends when the last one ends.
    - Edit any round: **drag** songs (or use ▲▼) to reorder them or move them to another round, **⇄** swaps a song for an unused one of similar length, **×** removes it, and the list under each round adds one. **+ Add a theme or mood** lets you note what the round is about. The theme is shown on the live screen during that round.
+   - **🔍 Search Spotify** on any round or cool-down finds any song on Spotify, not just the playlists. ▶ previews it, **Add** puts it at the end of the round or cool-down you choose.
+   - **▶ next to every song** previews it from a third of the way in, so you remember its feel. A small player appears bottom right: pause, ±10 seconds, drag to any point, ✕ to stop. Previews play where the music plays (Settings → Where the music plays).
    - **Fixed minutes**: every round lasts exactly the set minutes, playing through the playlist.
    - Spotify only lets the conductor read the songs of playlists **owned by** (or shared as a collaborator with) the logged-in account. Log in with the account that owns the playlists, or copy the songs into a playlist of your own.
-3. **Voice**: pick a model and a narrator.
+3. **Cool-downs**: the songs for each break are planned too, from the cool-down playlist (or, without one, from the heat songs that aren't in a round). Each break gets enough songs for its minutes. Preview, reorder, swap, remove and add songs exactly like in the rounds. Faded songs start after the break time, so they only play if the break runs long. **Suggest cool-down songs again** picks the next ones from the playlist. The cool-down playlist must be yours (or shared with you as a collaborator) for its songs to be read; otherwise the breaks play it as it is.
+4. **Voice**: pick a model and a narrator.
    - **Eleven v3** is the most expressive and understands delivery cues like `[softly]`, `[warmly]`, `[chuckles]`, `[sighs]`. Three dots `...` add a pause.
    - **Change voice** opens the ElevenLabs voice library. Search (e.g. "deep narrator", "southern storyteller"), press ▶ to hear a sample, and **Use** to pick one.
    - **Hear the welcome in this voice** records the welcome message so you can judge the voice with your own words.
-4. **Narration**: every message is in its own text box. Edit freely. Each has ▶ Play, Record, and *Use my MP3* (or drag an MP3 onto it).
-5. **Levels**: music volume for heat and cool-down, how far the music dips under the narrator, narrator volume.
-6. **Create session**: records every message that isn't recorded yet (or has changed), then saves. A progress panel shows each message, which ones are recording, and roughly how long is left. Eleven v3 takes around 5–20 seconds per message. If ElevenLabs doesn't answer within 90 seconds the message is tried once more, and **Stop** cancels (messages already recorded are kept).
+5. **Narration**: every message is in its own text box. Edit freely. Each has ▶ Play, Record, and *Use my MP3* (or drag an MP3 onto it).
+6. **Levels**: music volume for heat and cool-down, how far the music dips under the narrator, narrator volume.
+7. **Create session**: records every message that isn't recorded yet (or has changed), then saves. A progress panel shows each message, which ones are recording, and roughly how long is left. Eleven v3 takes around 5–20 seconds per message. If ElevenLabs doesn't answer within 90 seconds the message is tried once more, and **Stop** cancels (messages already recorded are kept).
 
 The bar at the bottom shows how many messages still need recording and roughly how many characters that is. ElevenLabs charges about one credit per character. Changing a message, the voice or the model marks the affected clips **Changed — record again**. Only those get re-recorded.
 
 Sessions are saved in this browser and, when you're signed in, in the cloud within a few seconds of every change. **Duplicate** a session to make a variation (another host, other playlists) without touching the original.
+
+## Messages inside songs (the timeline)
+
+**Timeline** (on the session page) lays the whole session out from left to right: the phases, every song, and the narration. It opens zoomed out to the whole session; **+** and **−** zoom.
+
+1. Click a song where you want something said. The cursor marks the spot.
+2. **+ Add a message**, then write it (e.g. a word about the song or the artist). With Eleven v3, cues like `[softly]` work here too.
+3. **Record** makes it in the session's voice. The yellow block on the narration lane is as long as the recording.
+4. **Drag** the block to move it, even into the middle of a song, or use −5 s / −1 s / +1 s / +5 s. ← and → nudge a selected block too.
+5. **Music during the message** sets how far the music dips for this message (lower = quieter music), and **Narrator volume** how loud it is.
+6. **▶ Hear it in place** plays the song from a few seconds before the message, with the message on top and the music dipping, exactly as in the sauna.
+
+During a session the message plays when its song reaches its spot. If a round or cool-down message is still speaking, it waits until that one ends. Skipping past the spot skips the message, and going back before it plays it again. Messages also show on the session page under their song, and in the editor under Narration, where their text can be edited and re-recorded. If a message's song is removed from the session, the message stays but isn't placed until you drag it onto a song again.
 
 ## Running a session
 
@@ -91,6 +122,8 @@ Press **Run** on a session, check the Spotify pill is green, and press **Start s
 | Up next | | Click a song to jump to it |
 
 In song rounds the timer counts down the songs that are left, and skipping past the last song moves on to the cool-down. *Up next* shows the round's remaining songs, then what comes after the round. "+1 song" adds the next unused song to the end of the round. It never goes into Spotify's own queue, so it can't leak into later rounds.
+
+Each cool-down plays its planned songs, then more from the cool-down playlist if the break runs long. After the last round the leftover cool-down songs keep playing until you end the session.
 
 At every phase change the narrator starts right away at full volume, while the old music fades out and the new music fades in underneath. If Spotify doesn't switch the music, the conductor notices within a few seconds and tries again.
 
@@ -114,6 +147,17 @@ The conductor saves where it is every two seconds (and, when signed in, reports 
 3. Claude sends back a playlist file. **Import playlists from Claude** creates them in your Spotify (private).
 4. Pick them in any session.
 
+## Sharing one session with collaborators
+
+Everyone in your workspace (e.g. Thora) already has every session. To work on **one** session with someone else:
+
+1. Open the session → **Share** → type their email address (the one they'll sign in with) → **Invite**.
+2. They open <https://sauna.roadtalk.io> and sign in with that address. The session shows up in their Sessions, marked **Shared by Ólafur**.
+3. They can change the songs, the narration and the messages inside songs, and run it. Their changes reach you, and yours reach them. Their plays count on the session too.
+4. **Make my own copy** gives them a separate copy that's theirs alone. **Remove** takes it out of their Sessions; it stays with you. Only your workspace can delete it.
+
+To play music they need Spotify Premium and their Spotify account on the app's user list (developer.spotify.com → User Management, at most 5 people). To record new narration they need an ElevenLabs key in their own Settings.
+
 ## Sync, sharing and backups
 
 - Signed in, every change is uploaded within seconds and other computers pick it up when they open the page, come back to it, or every two minutes. **Settings → Account and sync → Sync now** does it immediately.
@@ -122,7 +166,7 @@ The conductor saves where it is every two seconds (and, when signed in, reports 
 - **Sign out** keeps the sessions on this computer.
 - **Export** on a session card saves one file with everything, including the recorded narration. **Import session** restores it exactly. A good extra backup.
 
-**What is stored where.** In the cloud (Supabase, Europe): sessions, recordings, run history and the ElevenLabs key, readable only by members of your workspace; your Spotify login, readable only by you. The security rules are in `supabase/schema.sql`.
+**What is stored where.** In the cloud (Supabase, Europe): sessions, recordings, run history, plays and the ElevenLabs key, readable only by members of your workspace (and a shared session also by the people it's shared with); your Spotify login, readable only by you. The security rules are in `supabase/schema.sql`.
 
 ## Troubleshooting
 
@@ -145,9 +189,9 @@ The conductor saves where it is every two seconds (and, when signed in, reports 
 ## For the administrator
 
 - **Hosting**: GitHub Pages from the `docs/` folder of <https://github.com/olafurpall/sauna-conductor>, at `sauna.roadtalk.io` (a CNAME record at IONOS points `sauna` to `olafurpall.github.io`). After changing the app, run `python3 tools/build.py --cname sauna.roadtalk.io` and push. The build adds a version to every file name so browsers never mix old and new files.
-- **Supabase** project *sauna-conductor* (organization Roadtalk). The schema and security rules are in `supabase/schema.sql` (safe to run again). The app's address and publishable key are in `js/config.js`.
+- **Supabase** project *sauna-conductor* (organization Roadtalk). The schema and security rules are in `supabase/schema.sql` (safe to run again; version 2.5 added shared sessions and play counts, applied on 3 October 2026). The app's address and publishable key are in `js/config.js`.
 - **Google sign-in**: Google Cloud project *Sauna Conductor* (account olafurpall@gmail.com, separate from TARS) → Google Auth Platform: app *Sauna Conductor*, External, **In production**, web client *Web client 1* with redirect URI `https://cldzrjlznhyswfzylxsl.supabase.co/auth/v1/callback`. Its Client ID and secret are in Supabase → Authentication → Sign In / Providers → Google. If the secret is ever lost, add a new one under Google Auth Platform → Clients and paste it there.
 - **Spotify users**: Þóra (thora@munum.is) is on the app's User Management list. Spotify allows up to 5.
 - **Privacy page**: `privacy.html` (linked from the sign-in screen and Google's consent screen).
 - **Email links**: Supabase's built-in email only sends to members of the Supabase organization, a few per hour. For anyone else use Google, or set up your own email sender under Supabase → Authentication → Emails → SMTP.
-- **Who can sign up**: anyone who signs in gets their own empty workspace and can't see yours. To close the door completely, turn off *Allow new users to sign up* in Supabase → Authentication → Sign In / Providers once everyone has signed in once.
+- **Who can sign up**: anyone who signs in gets their own empty workspace and can't see yours. To close the door completely, turn off *Allow new users to sign up* in Supabase → Authentication → Sign In / Providers once everyone has signed in once. New collaborators then can't sign in until you turn it back on.

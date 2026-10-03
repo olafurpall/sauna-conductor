@@ -1,12 +1,13 @@
 // Session creator / editor: playlists, timing, voice, editable narration, recording.
 import { $, $$, h, toast, fmtDur, fmtSong, autosize, pickFile, sleep, now } from './util.js';
-import { planRounds } from './planner.js';
+import { planRounds, planBreaks } from './planner.js';
 import { app, cfg } from './app.js';
 import * as db from './db.js';
 import * as S from './sessions.js';
 import { cuePlan, defaultText } from './script.js';
 import { eleven, isV3, clipKey, prepText } from './eleven.js';
-import { auth, myPlaylists, parseUri, playlistInfo, sourceTracks } from './spotify.js';
+import { auth, myPlaylists, parseUri, playlistInfo, sourceTracks, searchTracks } from './spotify.js';
+import { preview, previewButton } from './preview.js';
 
 const el = $('#view-editor');
 let s = null;            // the session being edited
@@ -19,15 +20,21 @@ const audio = new Audio();
 let audioBtn = null;
 let audioUrl = null;
 let barEl = null;
+let returnTo = 'library';   // where Close / Save go back to
+const goBack = () => app.show(returnTo, returnTo === 'session' ? s.id : undefined);
 
 export const editorView = {
   el,
   get dirty() { return app.current === 'editor' && (dirty || busy); },
-  async enter(id) {
+  async enter(arg) {
     closePanel();
+    closeSearch();
     document.body.classList.add('editing');
     for (const k of Object.keys(trackCache)) delete trackCache[k];
-    planMsg = ''; planning = false; onHeatChange = null;
+    planMsg = ''; planning = false; onHeatChange = null; onCoolChange = null; coolMsg = ''; coolPlanning = false;
+    const o = arg && typeof arg === 'object' ? arg : { id: arg };
+    const id = o.id || null;
+    returnTo = o.from === 'session' && id ? 'session' : 'library';
     if (id) {
       s = await db.sessions.get(id);
       if (!s) { toast('That session no longer exists.'); app.show('library'); return; }
@@ -41,9 +48,13 @@ export const editorView = {
     S.ensureScript(s);
     dirty = !id;
     build();
+    if (!id) setTimeout(() => { const n = $('.ed-name', el); if (n) n.focus(); }, 50);
+    if (o.section) setTimeout(() => jumpTo(o.section), 60);
   },
   async leave() {
     stopAudio();
+    preview.stop();
+    closeSearch();
     if (busy) { toast('Wait until the recording has finished.'); return false; }
     if (dirty && !confirm('Leave without saving your changes?')) return false;
     closePanel();
@@ -85,7 +96,7 @@ function playAudio(src, btn, isBlob = false) {
 function build() {
   el.innerHTML = '';
   const wrap = h('div', { class: 'ed-wrap' },
-    head(), secMusic(), secTiming(), secVoice(), secScript(), secLevels());
+    head(), nav(), secMusic(), secTiming(), secVoice(), secScript(), secLevels());
   barEl = bar();
   el.append(wrap, barEl);
   $$('textarea', el).forEach(autosize);
@@ -93,17 +104,26 @@ function build() {
 }
 
 function head() {
-  const name = h('input', { type: 'text', class: 'ed-name', value: s.name, 'aria-label': 'Session name', placeholder: 'Session name' });
+  const name = h('input', { type: 'text', class: 'ed-name', value: s.name, 'aria-label': 'Session name', placeholder: 'Name this session, e.g. Friday Interstellar', maxlength: 80 });
   name.addEventListener('input', () => { s.name = name.value; touch(); });
+  const notes = h('input', { type: 'text', class: 'ed-notes', value: s.notes || '', 'aria-label': 'Notes', placeholder: 'Notes: what this session is for, the mood, who it suits…', maxlength: 200 });
+  notes.addEventListener('input', () => { s.notes = notes.value; touch(); });
   return h('div', { class: 'ed-head' },
-    h('button', { class: 'ghost small', onclick: () => app.show('library') }, '← Sessions'),
-    name);
+    h('button', { class: 'ghost small', onclick: goBack }, returnTo === 'session' ? '← Session' : '← Sessions'),
+    h('div', { class: 'ed-names' }, h('label', { class: 'ed-lab' }, 'Session name'), name, notes));
+}
+
+const SECTIONS = [['ed-music', 'Music'], ['ed-timing', 'Rounds'], ['ed-cool', 'Cool-downs'], ['ed-voice', 'Voice'], ['ed-script', 'Narration'], ['ed-levels', 'Levels']];
+function jumpTo(id) { const x = document.getElementById(id); if (x) x.scrollIntoView({ behavior: 'smooth', block: 'start' }); }
+function nav() {
+  return h('nav', { class: 'ed-nav', 'aria-label': 'Parts of the session' },
+    ...SECTIONS.map(([id, lab]) => h('button', { type: 'button', class: 'small ghost', onclick: () => jumpTo(id) }, lab)));
 }
 
 // ---------------------------------------------------------------- music
 let openPop = null;
 function closePops() { if (openPop) { openPop.remove(); openPop = null; } }
-document.addEventListener('click', (e) => { if (openPop && !e.target.closest('.pl-field')) closePops(); });
+document.addEventListener('click', (e) => { if (openPop && !e.target.closest('.pl-field, .pv')) closePops(); });
 document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closePops(); });
 
 function plSub(p) {
@@ -147,6 +167,7 @@ async function openPicker(field, key, optional, paint) {
     s.music[key] = p ? { uri: p.uri, name: p.name, image: p.image || '', total: p.total ?? null, ownerName: p.ownerName || '' } : null;
     touch(); paint(); closePops();
     if (key === 'heat' && before !== (p && p.uri) && onHeatChange) onHeatChange();
+    if (key === 'cool' && before !== (p && p.uri) && onCoolChange) onCoolChange();
   };
   const item = (p, sub) => h('button', { type: 'button', class: 'pl-item', onclick: () => choose(p) },
     p && p.image ? h('img', { src: p.image, alt: '' }) : h('span', { class: 'pl-ph' }),
@@ -206,21 +227,28 @@ const trackCache = {};
 let planMsg = '';
 let planning = false;
 let onHeatChange = null;
+let onCoolChange = null;
+let coolMsg = '';
+let coolPlanning = false;
 const slim = (t) => ({ uri: t.uri, name: t.name, artists: t.artists, durationMs: t.durationMs, imageSm: t.imageSm || '', i: t.i ?? 0 });
 
 function secTiming() {
   const t = s.timing;
   const sec = h('section', { class: 'ed-sec', id: 'ed-timing' });
+  const coolSec = h('section', { class: 'ed-sec', id: 'ed-cool' });
   const total = h('span', { class: 'val' });
   const modeSeg = h('div', { class: 'seg-ctl' });
   const body = h('div', {});
   const planBox = h('div', {});
+  const coolBox = h('div', {});
   const suggest = h('button', { class: 'small primary' }, 'Suggest rounds');
   suggest.addEventListener('click', () => autoPlan(S.planValid(s)));
+  const coolAgain = h('button', { class: 'small' }, 'Suggest cool-down songs again');
+  coolAgain.addEventListener('click', () => planCool(true));
   const keep = h('input', { type: 'checkbox', checked: !!t.keepOrder });
   keep.addEventListener('change', () => { t.keepOrder = keep.checked; touch(); autoPlan(false); });
   const auto = h('input', { type: 'checkbox', checked: !!t.autoNext });
-  auto.addEventListener('change', () => { t.autoNext = auto.checked; touch(); });
+  auto.addEventListener('change', () => { t.autoNext = auto.checked; touch(); renderCool(); });
 
   const paintTotal = () => {
     total.textContent = t.mode === 'songs' && !S.planValid(s) ? 'plan the rounds below' : fmtDur(S.totalMs(s));
@@ -249,47 +277,61 @@ function secTiming() {
 
   const fmtLen = (ms) => fmtSong(ms);
 
-  // ---- editing the rounds: move, reorder, swap, remove, add, theme
+  // ---- editing rounds and cool-downs: move, reorder, swap, remove, add, theme
+  // kind 'round' edits s.plan.rounds (pool: unused heat songs); kind 'break' edits s.plan.breaks.
+  const lists = (kind) => (kind === 'round' ? s.plan.rounds : s.plan.breaks);
+  const poolOf = (kind) => (kind === 'round' ? s.plan.pool : S.coolPoolOf(s));
   let drag = null;
-  const changed = () => { touch(); renderPlan(); paintTotal(); };
-  const toPool = (song) => { s.plan.pool.push(song); s.plan.pool.sort((a, b) => a.i - b.i); };
-  function moveSong(fromR, fromK, toR, toK) {
-    const [song] = s.plan.rounds[fromR].splice(fromK, 1);
+  const changed = () => { touch(); renderPlan(); renderCool(); paintTotal(); refreshInserts(); };
+  const toPool = (kind, song) => { const pool = poolOf(kind); pool.push(song); pool.sort((a, b) => (a.i ?? 0) - (b.i ?? 0)); };
+  function moveSong(kind, fromR, fromK, toR, toK) {
+    const L = lists(kind);
+    const [song] = L[fromR].splice(fromK, 1);
     if (!song) return;
     if (fromR === toR && toK > fromK) toK--;
-    s.plan.rounds[toR].splice(Math.max(0, Math.min(toK, s.plan.rounds[toR].length)), 0, song);
+    L[toR].splice(Math.max(0, Math.min(toK, L[toR].length)), 0, song);
     changed();
   }
   const clearDrop = () => $$('.rsongs .drop-before, .rsongs .drop-after, .rsongs.drop-end', el).forEach((x) => x.classList.remove('drop-before', 'drop-after', 'drop-end'));
 
-  function swapMenu(acts, songs, k) {
+  function swapMenu(kind, acts, songs, k) {
     const song = songs[k];
-    const opts = s.plan.pool.map((p, idx) => ({ p, idx, d: p.durationMs - song.durationMs })).sort((a, b) => Math.abs(a.d) - Math.abs(b.d));
+    const pool = poolOf(kind);
+    const opts = pool.map((p, idx) => ({ p, idx, d: p.durationMs - song.durationMs })).sort((a, b) => Math.abs(a.d) - Math.abs(b.d));
     const sign = (d) => (d >= 0 ? '+' : '−') + fmtSong(Math.abs(d));
     const sel = h('select', { class: 'swap', 'aria-label': `Swap ${song.name} for` },
       h('option', { value: '' }, opts.length ? `Swap “${song.name}” for…` : 'No unused songs to swap in'),
       ...opts.map((o) => h('option', { value: String(o.idx) }, `${o.p.name} — ${o.p.artists} · ${fmtSong(o.p.durationMs)} (${sign(o.d)})`)));
     sel.addEventListener('change', () => {
       if (sel.value === '') return;
-      const [rep] = s.plan.pool.splice(+sel.value, 1);
+      const [rep] = pool.splice(+sel.value, 1);
       songs.splice(k, 1, rep);
-      toPool(song);
+      toPool(kind, song);
       changed();
     });
-    sel.addEventListener('blur', () => setTimeout(renderPlan, 150));
-    sel.addEventListener('keydown', (e) => { if (e.key === 'Escape') renderPlan(); });
+    sel.addEventListener('blur', () => setTimeout(() => { renderPlan(); renderCool(); }, 150));
+    sel.addEventListener('keydown', (e) => { if (e.key === 'Escape') { renderPlan(); renderCool(); } });
     acts.closest('li').classList.add('swapping');
     acts.replaceChildren(sel);
     sel.focus();
   }
 
-  function roundCard(songs, ri) {
-    const R = s.plan.rounds.length;
+  function setCard(kind, songs, ri) {
+    const R = lists(kind).length;
+    const isRound = kind === 'round';
     const tot = S.sumMs(songs), n = songs.length;
-    const inLen = tot >= t.minMin * 60000 && tot <= t.maxMin * 60000;
-    const inN = n >= 3 && n <= 6;
-    const [cls, lab] = !n ? ['chip warn', 'No songs'] : !inLen ? ['chip warn', tot < t.minMin * 60000 ? 'Too short' : 'Too long'] : !inN ? ['chip warn', `${n} songs`] : ['chip ok', `${n} songs`];
-    const list = h('ol', { class: 'rsongs', 'data-ri': String(ri) });
+    const limit = t.breakMin * 60000;
+    let cls, lab, ok = true;
+    if (isRound) {
+      const inLen = tot >= t.minMin * 60000 && tot <= t.maxMin * 60000;
+      const inN = n >= 3 && n <= 6;
+      ok = inLen && inN;
+      [cls, lab] = !n ? ['chip warn', 'No songs'] : !inLen ? ['chip warn', tot < t.minMin * 60000 ? 'Too short' : 'Too long'] : !inN ? ['chip warn', `${n} songs`] : ['chip ok', `${n} songs`];
+    } else {
+      [cls, lab] = !n ? ['chip warn', 'No songs'] : tot >= limit ? ['chip ok', `Fills the ${t.breakMin} min`] : ['chip info', `${t.breakMin} min break, more songs follow`];
+    }
+    const list = h('ol', { class: 'rsongs', 'data-ri': String(ri), 'data-kind': kind });
+    let startAt = 0;
     songs.forEach((song, k) => {
       const ib = (label, title, fn, disabled) => {
         const b = h('button', { class: 'ib', type: 'button', title, 'aria-label': `${title}: ${song.name}`, disabled }, label);
@@ -297,71 +339,85 @@ function secTiming() {
         return b;
       };
       const acts = h('span', { class: 'acts' });
+      const L = lists(kind);
       acts.append(
-        ib('▲', 'Move up', () => (k > 0 ? moveSong(ri, k, ri, k - 1) : moveSong(ri, k, ri - 1, s.plan.rounds[ri - 1].length)), k === 0 && ri === 0),
-        ib('▼', 'Move down', () => (k < n - 1 ? moveSong(ri, k, ri, k + 2) : moveSong(ri, k, ri + 1, 0)), k === n - 1 && ri === R - 1),
-        ib('⇄', 'Swap for an unused song', () => swapMenu(acts, songs, k), !s.plan.pool.length),
-        ib('×', 'Remove from this round', () => { songs.splice(k, 1); toPool(song); changed(); }));
-      const li = h('li', { draggable: 'true' },
+        ib('▲', 'Move up', () => (k > 0 ? moveSong(kind, ri, k, ri, k - 1) : moveSong(kind, ri, k, ri - 1, L[ri - 1].length)), k === 0 && ri === 0),
+        ib('▼', 'Move down', () => (k < n - 1 ? moveSong(kind, ri, k, ri, k + 2) : moveSong(kind, ri, k, ri + 1, 0)), k === n - 1 && ri === R - 1),
+        ib('⇄', 'Swap for an unused song', () => swapMenu(kind, acts, songs, k), !poolOf(kind).length),
+        ib('×', isRound ? 'Remove from this round' : 'Remove from this cool-down', () => { songs.splice(k, 1); toPool(kind, song); changed(); }));
+      const past = !isRound && startAt >= limit;
+      startAt += song.durationMs;
+      const li = h('li', { draggable: 'true', class: past ? 'past' : null, title: past ? `Starts after the ${t.breakMin}-minute break, so it only plays if the break runs long` : null },
         h('span', { class: 'grip', title: 'Drag to move', 'aria-hidden': 'true' }, '⋮⋮'),
+        previewButton(song),
         song.imageSm ? h('img', { src: song.imageSm, alt: '' }) : h('span', { class: 'ph' }),
         h('span', { class: 'm' }, h('div', { class: 't' }, song.name), h('div', { class: 'a' }, song.artists)),
         h('span', { class: 'd' }, fmtSong(song.durationMs)), acts);
       li.addEventListener('dragstart', (e) => {
-        drag = { ri, k };
+        drag = { kind, ri, k };
         e.dataTransfer.effectAllowed = 'move';
-        e.dataTransfer.setData('text/plain', `${ri}:${k}`);
+        e.dataTransfer.setData('text/plain', `${kind}:${ri}:${k}`);
         li.classList.add('dragging');
       });
       li.addEventListener('dragend', () => { li.classList.remove('dragging'); drag = null; clearDrop(); });
       li.addEventListener('dragover', (e) => {
-        if (!drag) return;
+        if (!drag || drag.kind !== kind) return;
         e.preventDefault(); e.stopPropagation();
         const r = li.getBoundingClientRect(), after = e.clientY > r.top + r.height / 2;
         clearDrop();
         li.classList.add(after ? 'drop-after' : 'drop-before');
       });
       li.addEventListener('drop', (e) => {
-        if (!drag) return;
+        if (!drag || drag.kind !== kind) return;
         e.preventDefault(); e.stopPropagation();
         const r = li.getBoundingClientRect(), after = e.clientY > r.top + r.height / 2;
         const from = drag; drag = null; clearDrop();
-        moveSong(from.ri, from.k, ri, after ? k + 1 : k);
+        moveSong(kind, from.ri, from.k, ri, after ? k + 1 : k);
       });
       list.append(li);
     });
-    list.addEventListener('dragover', (e) => { if (!drag) return; e.preventDefault(); clearDrop(); list.classList.add('drop-end'); });
+    list.addEventListener('dragover', (e) => { if (!drag || drag.kind !== kind) return; e.preventDefault(); clearDrop(); list.classList.add('drop-end'); });
     list.addEventListener('dragleave', (e) => { if (!list.contains(e.relatedTarget)) list.classList.remove('drop-end'); });
     list.addEventListener('drop', (e) => {
-      if (!drag) return;
+      if (!drag || drag.kind !== kind) return;
       e.preventDefault();
       const from = drag; drag = null; clearDrop();
-      moveSong(from.ri, from.k, ri, songs.length);
+      moveSong(kind, from.ri, from.k, ri, songs.length);
     });
 
     // theme / mood for this round
-    if (!s.plan.themes) s.plan.themes = [];
-    const themeVal = s.plan.themes[ri] || '';
-    const closedLabel = () => (s.plan.themes[ri] || '').trim() || '+ Add a theme or mood for this round';
-    const sum = h('summary', {}, themeVal ? 'Theme or mood' : closedLabel());
-    const ta = h('textarea', { rows: 2, placeholder: 'e.g. Slow and spacious, deep breathing. Interstellar ambient building into soft house.' }, themeVal);
-    ta.addEventListener('input', () => { s.plan.themes[ri] = ta.value; touch(); });
-    const theme = h('details', { class: 'rtheme', open: !!themeVal }, sum, ta);
-    theme.addEventListener('toggle', () => { sum.textContent = theme.open ? 'Theme or mood' : closedLabel(); if (theme.open) ta.focus(); });
+    let theme = null;
+    if (isRound) {
+      if (!s.plan.themes) s.plan.themes = [];
+      const themeVal = s.plan.themes[ri] || '';
+      const closedLabel = () => (s.plan.themes[ri] || '').trim() || '+ Add a theme or mood for this round';
+      const sum = h('summary', {}, themeVal ? 'Theme or mood' : closedLabel());
+      const ta = h('textarea', { rows: 2, placeholder: 'e.g. Slow and spacious, deep breathing. Interstellar ambient building into soft house.' }, themeVal);
+      ta.addEventListener('input', () => { s.plan.themes[ri] = ta.value; touch(); });
+      theme = h('details', { class: 'rtheme', open: !!themeVal }, sum, ta);
+      // Only move the cursor when you open it yourself (redrawing an open card must not jump the page).
+      let byUser = false;
+      sum.addEventListener('click', () => { byUser = true; });
+      theme.addEventListener('toggle', () => { sum.textContent = theme.open ? 'Theme or mood' : closedLabel(); if (theme.open && byUser) ta.focus(); byUser = false; });
+    }
 
-    const add = h('select', { 'aria-label': `Add a song to round ${ri + 1}` },
-      h('option', { value: '' }, s.plan.pool.length ? '+ Add a song from the playlist…' : 'All songs are in use'),
-      ...s.plan.pool.map((p, idx) => h('option', { value: String(idx) }, `${p.name} — ${p.artists} · ${fmtSong(p.durationMs)}`)));
-    add.disabled = !s.plan.pool.length;
+    const pool = poolOf(kind);
+    const add = h('select', { 'aria-label': `Add a song to ${isRound ? 'round' : 'cool-down'} ${ri + 1}` },
+      h('option', { value: '' }, pool.length ? '+ Add a song from the playlist…' : 'All songs are in use'),
+      ...pool.map((p, idx) => h('option', { value: String(idx) }, `${p.name} — ${p.artists} · ${fmtSong(p.durationMs)}`)));
+    add.disabled = !pool.length;
     add.addEventListener('change', () => {
       if (add.value === '') return;
-      const [song] = s.plan.pool.splice(+add.value, 1);
+      const [song] = pool.splice(+add.value, 1);
       songs.push(song);
       changed();
     });
-    return h('div', { class: 'rcard' + (inLen && inN ? '' : ' off') },
-      h('div', { class: 'rhead' }, h('b', {}, `Round ${ri + 1}`), h('span', { class: 'rdur' }, fmtLen(tot)), h('span', { class: cls }, lab)),
-      theme, list, add);
+    const find = h('button', { type: 'button', class: 'small ghost sr-open', title: 'Search all of Spotify' }, '🔍 Search Spotify');
+    find.addEventListener('click', (e) => { e.stopPropagation(); openSearch({ kind, ri }); });
+    const name = isRound ? `Round ${ri + 1}` : `Cool-down ${ri + 1}`;
+    return h('div', { class: (isRound ? 'rcard' : 'bcard') + (ok ? '' : ' off') },
+      h('div', { class: 'rhead' }, h('b', {}, name), h('span', { class: 'rdur' }, fmtLen(tot)), h('span', { class: cls }, lab)),
+      theme, list, h('div', { class: 'radd' }, add, find));
   }
 
   function renderPlan() {
@@ -374,14 +430,74 @@ function secTiming() {
       return;
     }
     const grid = h('div', { class: 'rounds-grid' });
-    s.plan.rounds.forEach((songs, ri) => grid.append(roundCard(songs, ri)));
+    s.plan.rounds.forEach((songs, ri) => grid.append(setCard('round', songs, ri)));
     planBox.append(grid);
     const unused = s.plan.pool.length;
     planBox.append(h('p', { class: 'muted small mt' },
       `${unused} song${unused === 1 ? '' : 's'} from the playlist ${unused === 1 ? 'is' : 'are'} not in a round. ` +
-      (s.music.cool ? '' : 'Without a cool-down playlist, those play softly during the breaks. ') +
-      'Drag songs (or use ▲▼) to reorder them or move them to another round. ⇄ swaps a song for an unused one, × removes it.'));
+      'Drag songs (or use ▲▼) to reorder them or move them to another round. ⇄ swaps a song for an unused one, × removes it, ▶ previews it, and 🔍 finds any song on Spotify.'));
   }
+
+  // ---- cool-downs: the songs that play in each break
+  function renderCool() {
+    coolBox.innerHTML = '';
+    coolAgain.disabled = coolPlanning || !S.songMode(s);
+    if (!S.songMode(s)) {
+      coolBox.append(h('p', { class: 'muted small' }, t.mode === 'songs' ? 'Plan the rounds first. The cool-down songs are planned with them.' : 'With fixed minutes, the cool-downs play the cool-down playlist as it is.'));
+      return;
+    }
+    if (t.rounds < 2) { coolBox.append(h('p', { class: 'muted small' }, 'One round, so no cool-downs. The closing music plays after the round.')); return; }
+    if (coolPlanning) { coolBox.append(h('p', { class: 'muted small' }, 'Planning the cool-down songs…')); return; }
+    if (!S.breaksPlanned(s)) {
+      coolBox.append(h('p', { class: 'muted small' }, coolMsg
+        ? `${coolMsg} Until then the breaks play “${s.music.cool ? s.music.cool.name : 'the playlist'}” as it is.`
+        : 'Press “Suggest cool-down songs again” to choose the songs for each break.'));
+      return;
+    }
+    const grid = h('div', { class: 'breaks-grid' });
+    s.plan.breaks.forEach((songs, bi) => grid.append(setCard('break', songs, bi)));
+    coolBox.append(grid);
+    const from = s.plan.coolSource ? `“${s.music.cool ? s.music.cool.name : 'cool-down playlist'}”` : 'the heat playlist songs that are not in a round';
+    coolBox.append(h('p', { class: 'muted small mt' },
+      `Each break plays these songs from ${from}${t.autoNext ? `, and after ${t.breakMin} minutes the next round starts` : ''}. ` +
+      'Faded songs start after the break time, so they only play if the break runs long. If a break runs out of songs, more follow from the same playlist.'));
+  }
+
+  async function planCool(again, quiet = false) {
+    if (!S.songMode(s)) { renderCool(); return; }
+    if (t.rounds < 2) { s.plan.breaks = []; renderCool(); return; }
+    const src = s.music.cool ? s.music.cool.uri : '';
+    if (src && !auth.libraryOk) { coolMsg = 'Connect Spotify in Settings so the conductor can read the cool-down playlist.'; renderCool(); return; }
+    coolPlanning = true; renderCool();
+    try {
+      let tracks;
+      if (src) {
+        if (!trackCache[src]) trackCache[src] = await sourceTracks(src);
+        tracks = trackCache[src];
+      } else {
+        // Without a cool-down playlist, the breaks use the heat songs that are not in a round.
+        if (Array.isArray(s.plan.breaks) && !s.plan.coolSource) {
+          for (const b of s.plan.breaks) for (const x of b) if (!s.plan.pool.some((y) => y.uri === x.uri)) s.plan.pool.push(x);
+          s.plan.pool.sort((a, b) => (a.i ?? 0) - (b.i ?? 0));
+        }
+        tracks = s.plan.pool;
+      }
+      const res = planBreaks(tracks, {
+        breaks: t.rounds - 1, breakMs: t.breakMin * 60000, keepOrder: !s.music.shuffle,
+        offset: again ? s.plan.coolNext || 0 : 0, seed: again ? (s.plan.coolSeed || 1) + 1 : 1,
+      });
+      s.plan.breaks = res.breaks.map((b) => b.map(slim));
+      s.plan.coolNext = res.nextOffset;
+      s.plan.coolSeed = again ? (s.plan.coolSeed || 1) + 1 : 1;
+      if (src) { s.plan.coolSource = src; s.plan.coolPool = res.pool.map(slim); }
+      else { s.plan.coolSource = ''; s.plan.coolPool = null; s.plan.pool = res.pool.map(slim); }
+      coolMsg = '';
+      if (!quiet) touch();
+    } catch (e) { coolMsg = e.message; s.plan.breaks = null; s.plan.coolSource = ''; s.plan.coolPool = null; }
+    coolPlanning = false;
+    renderCool(); renderPlan(); paintTotal();
+  }
+  onCoolChange = () => planCool(false);
 
   async function autoPlan(again) {
     if (t.mode !== 'songs') return;
@@ -404,6 +520,8 @@ function secTiming() {
     } catch (e) { planMsg = e.message; s.plan = null; }
     planning = false;
     renderPlan(); paintTotal();
+    if (S.songMode(s)) await planCool(false);
+    else renderCool();
   }
   onHeatChange = () => autoPlan(false);
 
@@ -418,7 +536,7 @@ function secTiming() {
           num('Shortest round (min)', 'minMin', 1, 60, () => autoPlan(false)),
           num('Aim for (min)', 'roundMin', 1, 60, () => autoPlan(false)),
           num('Longest round (min)', 'maxMin', 1, 90, () => autoPlan(false)),
-          num('Cool-down (min)', 'breakMin', 1, 30)),
+          num('Cool-down (min)', 'breakMin', 1, 30, () => planCool(false))),
         h('div', { class: 'row mt' }, h('label', { class: 'chk' }, keep, "Keep the playlist's song order"), h('span', { class: 'spacer' }), suggest),
         planBox);
       renderPlan();
@@ -428,20 +546,101 @@ function secTiming() {
     }
     body.append(h('label', { class: 'chk mt' }, auto, 'Start the next round automatically when the cool-down ends'));
     paintTotal();
+    renderCool();
   }
 
   [['songs', 'Follow the songs'], ['timed', 'Fixed minutes']].forEach(([m, lab]) => {
     modeSeg.append(h('button', { type: 'button', 'data-m': m, onclick: () => { t.mode = m; touch(); paint(); if (m === 'songs' && !S.planValid(s)) autoPlan(false); } }, lab));
   });
 
+  // The search panel adds songs here.
+  addFromSearch = (target, song) => {
+    if (!S.songMode(s)) return false;
+    const L = target.kind === 'round' ? s.plan.rounds : s.plan.breaks;
+    if (!L || !L[target.ri]) return false;
+    const pool = poolOf(target.kind);
+    const pi = pool.findIndex((x) => x.uri === song.uri);
+    if (pi >= 0) pool.splice(pi, 1);
+    L[target.ri].push(song);
+    changed();
+    return true;
+  };
+  searchTargets = () => (S.songMode(s) ? [
+    ...s.plan.rounds.map((_, i) => ({ kind: 'round', ri: i, label: `Round ${i + 1}` })),
+    ...(S.breaksPlanned(s) ? s.plan.breaks.map((_, i) => ({ kind: 'break', ri: i, label: `Cool-down ${i + 1}` })) : []),
+  ] : []);
+
   sec.append(
     h('h2', {}, 'Rounds'),
     h('p', { class: 'help' }, 'Session length: ', total),
     h('div', { class: 'row', style: { marginBottom: '14px' } }, modeSeg),
     body);
+  coolSec.append(
+    h('div', { class: 'row' }, h('h2', {}, 'Cool-downs'), h('span', { class: 'spacer' }), coolAgain),
+    h('p', { class: 'help' }, 'The songs that play in each break, so you know the feel of every cool-down. ▶ previews a song.'),
+    coolBox);
   paint();
   if (t.mode === 'songs' && s.music.heat && !s.plan) setTimeout(() => autoPlan(false), 0);
-  return sec;
+  else if (S.songMode(s) && !S.breaksPlanned(s) && t.rounds > 1) setTimeout(() => planCool(false, true), 0);
+  const frag = document.createDocumentFragment();
+  frag.append(sec, coolSec);
+  return frag;
+}
+
+// ---------------------------------------------------------------- Spotify search panel
+let addFromSearch = () => false;
+let searchTargets = () => [];
+let searchEl = null;
+function closeSearch() { if (searchEl) { searchEl.remove(); searchEl = null; } }
+document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && searchEl && app.current === 'editor') closeSearch(); });
+
+function openSearch(target) {
+  closePops();
+  if (!auth.connected) { toast('Connect Spotify in Settings to search for songs.'); app.openSettings('set-spotify'); return; }
+  const targets = searchTargets();
+  if (searchEl) { const sel = $('select', searchEl); if (sel) sel.value = `${target.kind}:${target.ri}`; $('input', searchEl).focus(); return; }
+  const input = h('input', { type: 'search', placeholder: 'Song, artist or album…', 'aria-label': 'Search Spotify' });
+  const where = h('select', { 'aria-label': 'Add songs to' }, ...targets.map((x) => h('option', { value: `${x.kind}:${x.ri}`, selected: x.kind === target.kind && x.ri === target.ri }, x.label)));
+  const list = h('div', { class: 'sr-list' }, h('div', { class: 'muted small' }, 'Search all of Spotify. ▶ previews a song, Add puts it at the end of the chosen round or cool-down.'));
+  const more = h('button', { class: 'small ghost', hidden: true }, 'More results');
+  const close = h('button', { class: 'ib', type: 'button', title: 'Close', 'aria-label': 'Close search' }, '✕');
+  close.addEventListener('click', closeSearch);
+  searchEl = h('aside', { class: 'sr-panel', role: 'dialog', 'aria-label': 'Search Spotify' },
+    h('div', { class: 'row' }, h('b', {}, 'Search Spotify'), h('span', { class: 'spacer' }), close),
+    input, h('label', { class: 'f' }, 'Add to', where), list, more);
+  document.body.append(searchEl);
+  setTimeout(() => input.focus(), 0);
+
+  let q = '', offset = 0, seq = 0;
+  const row = (tr) => {
+    const add = h('button', { class: 'small' }, 'Add');
+    add.addEventListener('click', () => {
+      const [kind, ri] = where.value.split(':');
+      const ok = addFromSearch({ kind, ri: +ri }, slim({ ...tr, i: 100000 + (Date.now() % 100000) }));
+      if (ok) { add.textContent = 'Added ✓'; add.disabled = true; toast(`Added “${tr.name}” to ${where.selectedOptions[0].textContent}.`, 2500); }
+    });
+    return h('div', { class: 'sr-row' }, previewButton(tr),
+      tr.imageSm ? h('img', { src: tr.imageSm, alt: '' }) : h('span', { class: 'ph' }),
+      h('span', { class: 'm' }, h('div', { class: 't' }, tr.name), h('div', { class: 'a' }, [tr.artists, tr.album].filter(Boolean).join(' · '))),
+      h('span', { class: 'd' }, fmtSong(tr.durationMs)), add);
+  };
+  const run = async (append) => {
+    const my = ++seq;
+    if (!q) { list.innerHTML = ''; more.hidden = true; return; }
+    if (!append) { list.innerHTML = ''; list.append(h('div', { class: 'muted small' }, 'Searching…')); offset = 0; }
+    try {
+      const r = await searchTracks(q, offset);
+      if (my !== seq) return;
+      if (!append) list.innerHTML = '';
+      r.items.forEach((tr) => list.append(row(tr)));
+      if (!r.items.length && !append) list.append(h('div', { class: 'muted small' }, 'No songs found.'));
+      offset = r.offset; more.hidden = !r.more;
+    } catch (e) { if (my === seq) { list.innerHTML = ''; list.append(h('div', { class: 'muted small' }, e.message)); } }
+  };
+  let tm = null;
+  input.addEventListener('input', () => { clearTimeout(tm); tm = setTimeout(() => { q = input.value.trim(); run(false); }, 350); });
+  input.addEventListener('keydown', (e) => { if (e.key === 'Enter') { clearTimeout(tm); q = input.value.trim(); run(false); } });
+  more.addEventListener('click', () => run(true));
 }
 
 // ---------------------------------------------------------------- voice
@@ -619,16 +818,41 @@ async function openVoicePicker(box) {
 
 // ---------------------------------------------------------------- script
 let scriptBox = null;
+let insertBox = null;
 const cueEls = {};
+let refreshInserts = () => {};
 
 function secScript() {
   scriptBox = h('div', {});
+  insertBox = h('div', { class: 'ins-box' });
   const sec = h('section', { class: 'ed-sec', id: 'ed-script' },
     h('h2', {}, 'Narration'),
     h('p', { class: 'help' }, 'Edit any message. Each one is recorded as its own clip and plays at the moment shown. You can also drop in your own MP3.'),
-    scriptBox);
+    scriptBox, insertBox);
   refreshScript();
+  refreshInserts = paintInserts;
+  paintInserts();
   return sec;
+}
+
+// Messages placed inside songs (made on the timeline). Their text can be edited here too.
+function paintInserts() {
+  if (!insertBox) return;
+  insertBox.innerHTML = '';
+  for (const k of Object.keys(cueEls)) if (k.startsWith('x-')) delete cueEls[k];
+  const ins = s.inserts || [];
+  const openTl = h('button', { class: 'small' }, ins.length ? 'Open the timeline' : '+ Add a message inside a song');
+  openTl.addEventListener('click', async () => {
+    if (!S.songMode(s)) { toast('Plan the rounds first. Messages are placed inside the songs.'); return; }
+    if (dirty || !saved) { try { await persist(); } catch (e) { toast(e.message); return; } }
+    app.show('timeline', s.id);
+  });
+  insertBox.append(h('div', { class: 'cue-top ins-head' }, h('b', {}, 'Messages inside songs'),
+    h('span', { class: 'w' }, 'Short messages that play over the music, even in the middle of a song. Place them on the timeline.'),
+    h('span', { class: 'spacer' }), openTl));
+  for (const x of ins) insertBox.append(cueEditor({ id: S.insertCue(x), title: 'Message', when: S.insertWhen(s, x), insert: x }));
+  $$('textarea', insertBox).forEach(autosize);
+  updateBar();
 }
 
 function refreshScript() {
@@ -648,14 +872,15 @@ const STATE_LABEL = {
 };
 
 function cueEditor(c) {
-  const ta = h('textarea', { rows: 4, spellcheck: true }, s.script[c.id] || '');
+  const ins = c.insert || null;
+  const ta = h('textarea', { rows: ins ? 2 : 4, spellcheck: true, placeholder: ins ? 'What should the narrator say here?' : null }, S.cueText(s, c.id));
   const chip = h('span', { class: 'chip' });
   const count = h('span', { class: 'n' });
   const play = h('button', { class: 'small' }, '▶ Play');
   const rec = h('button', { class: 'small' }, 'Record');
   const up = h('button', { class: 'small ghost' }, 'Use my MP3');
-  const reset = h('button', { class: 'small ghost' }, 'Reset text');
-  const box = h('div', { class: 'cue-ed', 'data-cue': c.id },
+  const reset = h('button', { class: 'small ghost' }, ins ? 'Remove' : 'Reset text');
+  const box = h('div', { class: 'cue-ed' + (ins ? ' ins' : ''), 'data-cue': c.id },
     h('div', { class: 'cue-top' }, h('b', {}, c.title), h('span', { class: 'w' }, c.when), chip, count),
     ta, h('div', { class: 'row' }, play, rec, up, h('span', { class: 'spacer' }), reset));
 
@@ -663,7 +888,7 @@ function cueEditor(c) {
     const st = S.clipState(s, c.id, recs[c.id]);
     const [cls, lab] = busyCues.has(c.id) ? ['chip info', 'Recording…'] : STATE_LABEL[st];
     chip.className = cls; chip.textContent = lab;
-    count.textContent = `${prepText(s.script[c.id], s.voice.modelId).length} characters`;
+    count.textContent = `${prepText(S.cueText(s, c.id), s.voice.modelId).length} characters`;
     play.disabled = !recs[c.id] || busyCues.has(c.id);
     rec.disabled = busy;
     rec.textContent = st === 'missing' ? 'Record' : 'Record again';
@@ -671,11 +896,17 @@ function cueEditor(c) {
   cueEls[c.id] = { paint };
   paint();
 
-  ta.addEventListener('input', () => { s.script[c.id] = ta.value; autosize(ta); touch(); paint(); });
+  ta.addEventListener('input', () => { if (ins) ins.text = ta.value; else s.script[c.id] = ta.value; autosize(ta); touch(); paint(); });
   play.addEventListener('click', () => { if (recs[c.id]) playAudio(recs[c.id].blob, play, true); });
   rec.addEventListener('click', () => recordAndPlay(c.id, null));
   up.addEventListener('click', async () => { const [f] = await pickFile('audio/*'); if (f) useUpload(c.id, f); });
   reset.addEventListener('click', () => {
+    if (ins) {
+      if (!confirm('Remove this message?')) return;
+      s.inserts = s.inserts.filter((x) => x !== ins);
+      touch(); paintInserts();
+      return;
+    }
     const def = defaultText(c.id, s.timing.rounds, s.timing.roundMin);
     if (ta.value !== def && !confirm('Replace this message with the original text?')) return;
     ta.value = def; s.script[c.id] = def; autosize(ta); touch(); paint();
@@ -826,10 +1057,10 @@ async function record(ids) {
   if (!eleven.hasKey) { toast('Add your ElevenLabs API key in Settings first.'); app.openSettings('set-eleven'); return false; }
   if (job && !job.result) { toast('A recording is already running.'); return false; }
   closePanel();   // a finished panel from an earlier recording
-  const titles = Object.fromEntries(S.cues(s).map((c) => [c.id, c.title]));
+  const titles = Object.fromEntries(S.allCues(s).map((c) => [c.id, c.title]));
   job = {
     started: now(), stage: 'Checking with ElevenLabs…', result: null, error: '', cancelled: false, controllers: new Set(),
-    items: ids.map((id) => ({ id, title: titles[id] || id, chars: prepText(s.script[id], s.voice.modelId).length, state: 'waiting', started: 0, took: 0 })),
+    items: ids.map((id) => ({ id, title: titles[id] || id, chars: prepText(S.cueText(s, id), s.voice.modelId).length, state: 'waiting', started: 0, took: 0 })),
   };
   busy = true;
   updateBar();
@@ -854,7 +1085,7 @@ async function record(ids) {
         it.state = 'recording'; it.started = now();
         busyCues.add(it.id); refreshCueStates();
         try {
-          const text = s.script[it.id];
+          const text = S.cueText(s, it.id);
           const blob = await ttsWithRetry(text, it);
           const rec = { blob, key: clipKey(text, s.voice), chars: it.chars, at: Date.now(), source: 'generated' };
           await db.clips.put(s.id, it.id, rec);
@@ -919,18 +1150,18 @@ function bar() {
   saveBtn = h('button', { onclick: async () => { try { await persist(); toast('Saved.'); } catch (e) { toast(e.message, 9000); } } }, 'Save draft');
   createBtn = h('button', { class: 'primary', onclick: createSession }, 'Create session');
   return h('div', { class: 'ed-bar' }, sumEl, h('span', { class: 'spacer' }),
-    h('button', { class: 'ghost', onclick: () => app.show('library') }, 'Close'), saveBtn, createBtn);
+    h('button', { class: 'ghost', onclick: goBack }, 'Close'), saveBtn, createBtn);
 }
 
 function pending() {
-  return S.cues(s).filter((c) => { const st = S.clipState(s, c.id, recs[c.id]); return st === 'missing' || st === 'outdated'; });
+  return S.allCues(s).filter((c) => { const st = S.clipState(s, c.id, recs[c.id]); return st === 'missing' || st === 'outdated'; });
 }
 
 function updateBar() {
   if (!sumEl) return;
-  const list = S.cues(s);
+  const list = S.allCues(s);
   const todo = pending();
-  const chars = todo.reduce((n, c) => n + prepText(s.script[c.id], s.voice.modelId).length, 0);
+  const chars = todo.reduce((n, c) => n + prepText(S.cueText(s, c.id), s.voice.modelId).length, 0);
   sumEl.innerHTML = '';
   sumEl.append(h('b', {}, `${list.length} messages`), ' · ',
     todo.length ? `${todo.length} to record, about ${chars.toLocaleString()} characters` : 'all recorded',
@@ -960,5 +1191,5 @@ async function createSession() {
   try { await persist(); } catch (e) { toast(e.message, 9000); return; }
   closePanel();
   toast(todo.length ? 'Session created and narration recorded.' : 'Session saved.');
-  app.show('library');
+  goBack();
 }

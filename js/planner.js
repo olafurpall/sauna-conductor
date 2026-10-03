@@ -73,3 +73,37 @@ export function planRounds(allTracks, o) {
   const lastUsed = rounds.length ? rounds[rounds.length - 1][rounds[rounds.length - 1].length - 1].i : 0;
   return { rounds, unused, nextOffset: lastUsed + 1 };
 }
+
+// Cool-down planner: one list of songs per break, each long enough to fill the break.
+// Songs follow the playlist order (or a seeded shuffle), and are not reused until all have played.
+// Returns { breaks: [[track…]…], pool: [unused…], nextOffset }.
+export function planBreaks(allTracks, o) {
+  const B = Math.max(0, o.breaks | 0), want = Math.max(60000, o.breakMs || 0);
+  const avoid = o.avoid || new Set();
+  const tracks = playable(allTracks).filter((t) => !avoid.has(t.uri)).map((t, i) => ({ ...t, i: t.i ?? i }));
+  if (!tracks.length) return { breaks: Array.from({ length: B }, () => []), pool: [], nextOffset: 0 };
+  let seq;
+  if (o.keepOrder !== false) {
+    const off = ((o.offset || 0) % tracks.length + tracks.length) % tracks.length;
+    seq = tracks.slice(off).concat(tracks.slice(0, off));
+  } else {
+    const rand = rng(o.seed || 1);
+    seq = tracks.slice();
+    for (let i = seq.length - 1; i > 0; i--) { const j = Math.floor(rand() * (i + 1)); [seq[i], seq[j]] = [seq[j], seq[i]]; }
+  }
+  const used = new Set();
+  let p = 0;
+  const breaks = [];
+  for (let b = 0; b < B; b++) {
+    const set = [];
+    let tot = 0, guard = 0;
+    while (tot < want && guard < seq.length * 2) {
+      const t = seq[p % seq.length]; p++; guard++;
+      if (used.has(t.uri) && used.size < seq.length) continue;          // every song once before any repeats
+      if (set.some((x) => x.uri === t.uri)) { if (set.length >= seq.length) break; continue; }
+      set.push(t); used.add(t.uri); tot += t.durationMs;
+    }
+    breaks.push(set);
+  }
+  return { breaks, pool: seq.filter((t) => !used.has(t.uri)), nextOffset: (o.offset || 0) + p };
+}

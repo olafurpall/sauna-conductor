@@ -1,11 +1,13 @@
 // Cloud sync (Supabase): sign-in, a workspace shared with others, and syncing of
-// sessions, recorded narration, run history, the ElevenLabs key and your Spotify login.
+// sessions, recorded narration, run history, play counts, the ElevenLabs key and your Spotify login.
+// Single sessions can also be shared with people outside the workspace (collaborators).
 // The browser's own storage stays the working copy, so everything keeps working offline.
-import { SUPABASE_URL, SUPABASE_KEY } from './config.js?v=2.4-5089199b';
-import { app } from './app.js?v=2.4-5089199b';
-import { store, log, toast, sleep } from './util.js?v=2.4-5089199b';
-import * as db from './db.js?v=2.4-5089199b';
-import { eleven } from './eleven.js?v=2.4-5089199b';
+import { SUPABASE_URL, SUPABASE_KEY } from './config.js?v=2.5-6e8466df';
+import { app } from './app.js?v=2.5-6e8466df';
+import { store, log, toast, sleep } from './util.js?v=2.5-6e8466df';
+import * as db from './db.js?v=2.5-6e8466df';
+import { eleven } from './eleven.js?v=2.5-6e8466df';
+import { countsAsPlay } from './sessions.js?v=2.5-6e8466df';
 
 const Q = { quiet: true };            // local writes made by sync must not trigger another upload
 const BUCKET = 'clips';
@@ -29,6 +31,16 @@ export const cloud = {
     return m.full_name || m.name || this.email;
   },
 };
+
+// Which workspace a session lives in: your own, or the one that shared it with you.
+const homeWs = (sid) => store.get('synced', {})[sid] || (cloud.ws && cloud.ws.id);
+const sharedMap = () => store.get('shared', {});
+// A session someone shared with you (it lives in their workspace): { ws, by, email } or null.
+export function sharedWithMe(sid) {
+  const x = sharedMap()[sid];
+  return x && cloud.ws && x.ws !== cloud.ws.id ? x : null;
+}
+const myEmail = () => String(cloud.email || '').toLowerCase();
 
 function setStatus(status, detail = '') {
   cloud.status = status;
@@ -160,8 +172,9 @@ export async function switchWorkspace(id) {
 // Sessions from another workspace are safe in the cloud; drop the local copies when switching.
 async function forgetWorkspace(wsId) {
   const synced = store.get('synced', {});
+  const shared = sharedMap();
   for (const [sid, w] of Object.entries(synced)) {
-    if (w !== wsId) continue;
+    if (w !== wsId || shared[sid]) continue;
     await db.clips.delSession(sid, Q); await db.sessions.del(sid, Q);
     delete synced[sid];
   }
@@ -334,7 +347,9 @@ async function fullSync() {
     for (const sid of live) if (await syncClips(sid, bySession[sid] || {}, work)) changed = true;
     if (changed) app.emit('cloud-data');
 
+    if (await syncShared(byId, work)) app.emit('cloud-data');
     await syncRuns();
+    await syncPlays();
     cloud.lastSync = Date.now();
     setStatus('synced');
   } catch (e) {
@@ -347,12 +362,11 @@ async function fullSync() {
 async function putSession(s) {
   const ts = s.updatedAt || Date.now();
   if (!s.updatedAt) { s.updatedAt = ts; await db.sessions.put(s, Q); }
-  const res = check(await cloud.sb.rpc('put_session', { ws: cloud.ws.id, sid: s.id, body: s, ts, del: false }));
+  const res = check(await cloud.sb.rpc('put_session', { ws: homeWs(s.id), sid: s.id, body: s, ts, del: false }));
   return res !== null && res !== undefined;
 }
 
-async function syncClips(sid, remote, work) {
-  const ws = cloud.ws.id;
+async function syncClips(sid, remote, work, ws = homeWs(sid)) {
   const local = await db.clips.forSession(sid);
   let pulled = false;
   for (const cue of new Set([...Object.keys(local), ...Object.keys(remote)])) {
@@ -382,7 +396,15 @@ async function syncClips(sid, remote, work) {
 }
 
 async function deleteSession(sid) {
-  const ws = cloud.ws.id;
+  const ws = homeWs(sid);
+  if (ws !== cloud.ws.id && sharedMap()[sid]) {
+    // Someone else's session: just stop collaborating on it. It stays with them.
+    check(await cloud.sb.from('session_shares').delete().eq('workspace_id', ws).eq('session_id', sid).eq('email', myEmail()));
+    const sh = sharedMap(); delete sh[sid]; store.set('shared', sh);
+    const synced = store.get('synced', {}); delete synced[sid]; store.set('synced', synced);
+    const tomb = store.get('tomb', {}); delete tomb[sid]; store.set('tomb', tomb);
+    return;
+  }
   check(await cloud.sb.rpc('put_session', { ws, sid, body: {}, ts: Date.now(), del: true }));
   const rows = check(await cloud.sb.from('clips').select('path').eq('workspace_id', ws).eq('session_id', sid)) || [];
   if (rows.length) await cloud.sb.storage.from(BUCKET).remove(rows.map((r) => r.path));
@@ -418,12 +440,13 @@ async function pushDirty() {
         const s = await db.sessions.get(sid);
         if (!s) { if (store.get('tomb', {})[sid]) await deleteSession(sid); continue; }
         const synced = store.get('synced', {});
-        if (synced[sid] && synced[sid] !== ws) continue;
+        const home = synced[sid] || ws;
+        if (home !== ws && !sharedMap()[sid]) continue;                // belongs to another workspace
         if (!(await putSession(s))) { again = true; continue; }        // someone saved a newer version: fetch it
-        synced[sid] = ws; store.set('synced', synced);
+        synced[sid] = home; store.set('synced', synced);
         const remote = {};
-        for (const c of check(await cloud.sb.from('clips').select('session_id,cue,key,source,chars,at,path,size,type').eq('workspace_id', ws).eq('session_id', sid)) || []) remote[c.cue] = c;
-        if (await syncClips(sid, remote, { done: 0 })) app.emit('cloud-data');
+        for (const c of check(await cloud.sb.from('clips').select('session_id,cue,key,source,chars,at,path,size,type').eq('workspace_id', home).eq('session_id', sid)) || []) remote[c.cue] = c;
+        if (await syncClips(sid, remote, { done: 0 }, home)) app.emit('cloud-data');
       }
       cloud.lastSync = Date.now();
       setStatus('synced');
@@ -492,10 +515,98 @@ async function sendRun() {
 }
 app.on('history-add', (entry) => {
   if (!cloud.ws || !entry || !entry.runId) return;
+  if (countsAsPlay(entry) && entry.sessionId) sendPlays([entry]).then(() => syncPlays()).catch((e) => log('cloud-plays', errText(e)));
   clearTimeout(runTimer); runPending = null;
   cloud.sb.from('runs').upsert({ workspace_id: cloud.ws.id, run_id: entry.runId, session_id: entry.sessionId || null, active: false, data: entry, updated_at: entry.endedAt || Date.now() })
     .then((res) => { if (res.error) log('cloud-history', errText(res.error)); }, (e) => log('cloud-history', errText(e)));
 });
+
+// ---------------------------------------------------------------- sessions shared with you
+// Sessions other people shared with you live in their workspace; they sync here like your own.
+async function syncShared(localById, work) {
+  const mine = myEmail();
+  if (!mine) return false;
+  const rows = (check(await cloud.sb.from('session_shares').select('workspace_id,session_id,email,invited_by_name').eq('email', mine)) || [])
+    .filter((r) => r.workspace_id !== cloud.ws.id);
+  const before = sharedMap();
+  const now = {};
+  const byWs = {};
+  for (const r of rows) {
+    now[r.session_id] = { ws: r.workspace_id, by: r.invited_by_name || 'someone', email: r.email };
+    (byWs[r.workspace_id] = byWs[r.workspace_id] || []).push(r.session_id);
+  }
+  const synced = store.get('synced', {});
+  let changed = false;
+  // No longer shared (or deleted by its owner): remove the local copy.
+  for (const [sid, x] of Object.entries(before)) {
+    if (now[sid]) continue;
+    if (synced[sid] === x.ws) { await db.clips.delSession(sid, Q); await db.sessions.del(sid, Q); delete synced[sid]; changed = true; }
+  }
+  store.set('shared', now);
+  for (const [w, sids] of Object.entries(byWs)) {
+    const ss = check(await cloud.sb.from('sessions').select('id,data,updated_at,deleted').eq('workspace_id', w).in('id', sids)) || [];
+    const cs = check(await cloud.sb.from('clips').select('session_id,cue,key,source,chars,at,path,size,type').eq('workspace_id', w).in('session_id', sids)) || [];
+    for (const r of ss) {
+      const l = localById.get(r.id);
+      synced[r.id] = w;
+      if (r.deleted) {
+        if (l) { await db.clips.delSession(r.id, Q); await db.sessions.del(r.id, Q); changed = true; }
+        continue;
+      }
+      if (!l || (l.updatedAt || 0) < r.updated_at) { await db.sessions.put(r.data, Q); changed = true; }
+      else if ((l.updatedAt || 0) > r.updated_at) { store.set('synced', synced); await putSession(l); }
+      const remote = {};
+      for (const c of cs.filter((x) => x.session_id === r.id)) remote[c.cue] = c;
+      if (await syncClips(r.id, remote, work, w)) changed = true;
+    }
+  }
+  store.set('synced', synced);
+  return changed;
+}
+
+// People you shared one session with (besides the members of its workspace).
+export async function listShares(s) {
+  const ws = homeWs(s.id);
+  return check(await cloud.sb.from('session_shares').select('email,invited_by_name,created_at').eq('workspace_id', ws).eq('session_id', s.id)) || [];
+}
+export async function addShare(s, email) {
+  const e = String(email || '').trim().toLowerCase();
+  if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(e)) throw new Error('That does not look like an email address.');
+  if (e === myEmail()) throw new Error('That is you.');
+  // Make sure the session is in the cloud before inviting anyone to it.
+  const synced = store.get('synced', {});
+  if (!synced[s.id]) { synced[s.id] = cloud.ws.id; store.set('synced', synced); }
+  await putSession(s);
+  const remote = {};
+  for (const c of check(await cloud.sb.from('clips').select('session_id,cue,key,source,chars,at,path,size,type').eq('workspace_id', homeWs(s.id)).eq('session_id', s.id)) || []) remote[c.cue] = c;
+  await syncClips(s.id, remote, { done: 0 });
+  check(await cloud.sb.from('session_shares').upsert({ workspace_id: homeWs(s.id), session_id: s.id, email: e, invited_by: cloud.user.id, invited_by_name: cloud.name }));
+}
+export async function removeShare(s, email) {
+  check(await cloud.sb.from('session_shares').delete().eq('workspace_id', homeWs(s.id)).eq('session_id', s.id).eq('email', email));
+}
+
+// ---------------------------------------------------------------- play counts
+// Every run that finishes (or lasts 10 minutes) counts as a play, from any computer and any collaborator.
+async function sendPlays(entries) {
+  const sent = new Set(store.get('playsSent', []));
+  const rows = entries.filter((e) => e.runId && e.sessionId && !sent.has(e.runId) && countsAsPlay(e)).map((e) => ({
+    workspace_id: homeWs(e.sessionId), session_id: e.sessionId, run_id: e.runId,
+    played_at: new Date(e.endedAt || e.startedAt || Date.now()).toISOString(), elapsed_ms: Math.round(e.elapsedMs || 0), status: e.status || '',
+  }));
+  for (const r of rows) {
+    const res = await cloud.sb.from('session_plays').upsert(r);
+    if (!res.error) sent.add(r.run_id); else log('cloud-play', errText(res.error));
+  }
+  store.set('playsSent', [...sent].slice(-500));
+}
+async function syncPlays() {
+  await sendPlays(store.get('runs', []));
+  const rows = check(await cloud.sb.rpc('play_counts')) || [];
+  const next = {};
+  for (const r of rows) next[r.session_id] = { n: Number(r.plays) || 0, last: r.last_played ? Date.parse(r.last_played) : 0 };
+  if (JSON.stringify(next) !== JSON.stringify(store.get('plays', {}))) { store.set('plays', next); app.emit('plays'); }
+}
 
 // For diagnostics.
 export function cloudSummary() {

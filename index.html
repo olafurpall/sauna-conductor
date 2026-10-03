@@ -45,6 +45,15 @@
     </div>
   </div>
   <div class="banner warn" id="libBanner" hidden></div>
+  <div class="row lib-sort" id="libSortRow" hidden>
+    <label class="muted small" for="libSort">Sort by</label>
+    <select id="libSort">
+      <option value="changed">Recently changed</option>
+      <option value="plays">Most played</option>
+      <option value="played">Recently played</option>
+      <option value="name">Name</option>
+    </select>
+  </div>
   <div class="banner resume" id="resumeBanner" hidden></div>
   <div class="cards" id="sessionCards"></div>
 
@@ -68,6 +77,12 @@
 
 <!-- ============================================================ Editor -->
 <section class="view" id="view-editor" hidden></section>
+
+<!-- ============================================================ One session -->
+<section class="view" id="view-session" hidden></section>
+
+<!-- ============================================================ Timeline -->
+<section class="view" id="view-timeline" hidden></section>
 
 <!-- ============================================================ Live -->
 <section class="view" id="view-live" hidden>
