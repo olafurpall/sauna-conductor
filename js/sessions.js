@@ -11,10 +11,34 @@ export const DEFAULT_VOICE = {
   previewUrl: '', modelId: 'eleven_v3', stability: 0.5, similarity: 0.75, style: 0, speed: 1,
 };
 
+// Native Icelandic voices in the ElevenLabs voice library (Reykjavík accent). They need Eleven v3 or
+// newer: older models (Multilingual v2, Flash) don't speak Icelandic.
+export const RECOMMENDED_VOICES = {
+  is: [
+    { id: 'EPNZHjyiFUvsaPPq9zRU', name: 'Ingibjorg - Calm, Warm Ad', desc: 'Mellow and relaxed, smooth and reassuring. A good start for the sauna.', labels: ['icelandic', 'female', 'calm', 'warm'] },
+    { id: 'rx2Jwpr6lciMIbfYvpOA', name: 'Katrin - Warm, Patient Friend', desc: 'Warm and unhurried, like an old friend settling in for a chat.', labels: ['icelandic', 'female', 'warm', 'conversational'] },
+    { id: 'phADS9h1woMxkLioLz5z', name: 'Sigrun - Calm, Direct Narrator', desc: 'Plain, steady and warm narration that puts clarity first.', labels: ['icelandic', 'female', 'narrator'] },
+    { id: '6LR26ZnZ2USBpLHfBBH7', name: 'Bjorn - Calm, Serious Narrator', desc: 'Low and deep, measured and unhurried.', labels: ['icelandic', 'male', 'deep', 'narrator'] },
+    { id: 'bXhV5Ndu4ILBlw7Vibmd', name: 'Gunnar - Calm, Serious Narrator', desc: 'Deep and even, calm authority without drama.', labels: ['icelandic', 'male', 'deep', 'narrator'] },
+    { id: 'B4dcQDH3p7a2cAn9wzSc', name: 'Baldur - Patient Support Agent', desc: 'Light and patient, clear and never rushed.', labels: ['icelandic', 'male', 'patient'] },
+  ],
+};
+// Which narration models speak a language (Eleven v3 and newer speak 70+ languages, Icelandic included).
+const V2_LANGS = ['en', 'ja', 'zh', 'de', 'hi', 'fr', 'ko', 'pt', 'it', 'es', 'id', 'nl', 'tr', 'fil', 'pl', 'sv', 'bg', 'ro', 'ar', 'cs', 'el', 'fi', 'hr', 'ms', 'sk', 'da', 'ta', 'uk', 'ru'];
+export function modelSpeaks(modelId, lang) {
+  const m = String(modelId || '');
+  if (!lang || lang === 'en' || /_v[3-9]/.test(m)) return true;
+  if (/multilingual_v2/.test(m)) return V2_LANGS.includes(lang);
+  if (/(flash|turbo)_v2_5/.test(m)) return [...V2_LANGS, 'hu', 'no', 'nb', 'vi'].includes(lang);
+  return true;
+}
+// The language and host a session's default texts are written for.
+export const textOpts = (s) => ({ lang: s.lang || 'en', host: s.host });
+
 export function newSession(over = {}) {
   const t = Date.now();
   const s = {
-    id: uid(), name: '', notes: '', createdAt: t, updatedAt: t, lastRunAt: null,
+    id: uid(), name: '', notes: '', lang: 'en', host: '', createdAt: t, updatedAt: t, lastRunAt: null,
     music: { heat: null, cool: null, shuffle: false, smooth: true, fadeSec: 6 },
     // mode 'songs': each round is a planned set of whole songs (roundMin = the length to aim for)
     // mode 'timed': each round lasts exactly roundMin minutes
@@ -24,9 +48,11 @@ export function newSession(over = {}) {
     inserts: [],  // messages placed inside songs: { id, text, uri, atMs, duck, narr }
     levels: { heat: 80, cool: 45, duck: 20, narr: 100 },
     voice: { ...DEFAULT_VOICE },
-    script: defaultScript(4, 15),
+    script: null,
   };
-  return Object.assign(s, over);
+  Object.assign(s, over);
+  if (!s.script) s.script = defaultScript(s.timing.rounds, s.timing.roundMin, textOpts(s));
+  return s;
 }
 
 export function ensureTiming(s) {
@@ -134,7 +160,8 @@ export function ensureScript(s) {
   ensureTiming(s);
   if (!Array.isArray(s.inserts)) s.inserts = [];
   if (typeof s.notes !== 'string') s.notes = '';
-  for (const c of cues(s)) if (typeof s.script[c.id] !== 'string') s.script[c.id] = defaultText(c.id, s.timing.rounds, s.timing.roundMin);
+  if (!s.lang) s.lang = 'en';
+  for (const c of cues(s)) if (typeof s.script[c.id] !== 'string') s.script[c.id] = defaultText(c.id, s.timing.rounds, s.timing.roundMin, textOpts(s));
   return s;
 }
 
@@ -154,6 +181,7 @@ export async function readiness(s) {
 
 export async function save(s) {
   s.updatedAt = Date.now();
+  try { s.totalMin = Math.round(totalMs(s) / 60000); } catch { /* not planned yet */ }
   await db.sessions.put(s);
   return s;
 }

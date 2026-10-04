@@ -1,12 +1,13 @@
 // Sessions library: saved sessions, import/export, and the Claude playlist workflow.
-import { $, h, toast, fmt, fmtDur, fmtDate, fmtSong, download, pickFile, slug, store } from './util.js?v=2.5.1-24e6cfcc';
-import { liveView, interruptedRun, discardRun, HISTORY_KEY } from './live.js?v=2.5.1-24e6cfcc';
-import { app } from './app.js?v=2.5.1-24e6cfcc';
-import * as db from './db.js?v=2.5.1-24e6cfcc';
-import * as S from './sessions.js?v=2.5.1-24e6cfcc';
-import { auth, exportLibrary, importPlan, openUrl } from './spotify.js?v=2.5.1-24e6cfcc';
-import { eleven } from './eleven.js?v=2.5.1-24e6cfcc';
-import { sharedWithMe } from './cloud.js?v=2.5.1-24e6cfcc';
+import { $, h, toast, fmt, fmtDur, fmtDate, fmtSong, download, pickFile, slug, store } from './util.js?v=3.0-152b544c';
+import { liveView, interruptedRun, discardRun, HISTORY_KEY } from './live.js?v=3.0-152b544c';
+import { app } from './app.js?v=3.0-152b544c';
+import * as db from './db.js?v=3.0-152b544c';
+import * as S from './sessions.js?v=3.0-152b544c';
+import { langOf } from './script.js?v=3.0-152b544c';
+import { auth, exportLibrary, importPlan, openUrl } from './spotify.js?v=3.0-152b544c';
+import { eleven } from './eleven.js?v=3.0-152b544c';
+import { cloud, sharedWithMe, roleOf, sharedOut } from './cloud.js?v=3.0-152b544c';
 
 const el = $('#view-library');
 
@@ -91,12 +92,13 @@ function banner() {
   b.innerHTML = '';
   const lines = [];
   if (!auth.connected) lines.push(['Connect Spotify so the conductor can play music and list your playlists.', 'Connect Spotify', 'set-spotify']);
+  else if (auth.problem && cloud.signedIn) lines.push([cloud.request && cloud.request.status === 'pending' ? 'Spotify hasn’t let you in yet. Your request is waiting; you can look around and plan sessions meanwhile.' : 'Spotify hasn’t let you in yet. Ask to be added to the guest list.', 'Spotify access', 'onboard']);
   else if (!auth.libraryOk) lines.push(['Reconnect Spotify once so the conductor can read your playlists and create new ones.', 'Reconnect Spotify', 'set-spotify']);
-  if (!eleven.hasKey) lines.push(['Add your ElevenLabs API key so narration is recorded in a real voice.', 'Add API key', 'set-eleven']);
+  if (!eleven.hasKey && !eleven.server) lines.push(['Add your ElevenLabs API key so narration is recorded in a real voice.', 'Add API key', 'set-eleven']);
   b.hidden = !lines.length;
   for (const [txt, btn, sec] of lines) {
     b.append(h('div', { class: 'row', style: { justifyContent: 'space-between', margin: '4px 0' } },
-      h('span', {}, txt), h('button', { class: 'small primary', onclick: () => app.openSettings(sec) }, btn)));
+      h('span', {}, txt), h('button', { class: 'small primary', onclick: () => (sec === 'onboard' ? app.show('onboard') : app.openSettings(sec)) }, btn)));
   }
 }
 app.on('spotify', () => { if (app.current === 'library') banner(); });
@@ -106,6 +108,8 @@ async function card(s) {
   const r = await S.readiness(s);
   const pl = S.plays(s);
   const shared = sharedWithMe(s.id);
+  const viewer = roleOf(s.id) === 'viewer';
+  const out = sharedOut(s.id);
   const open = () => app.show('session', s.id);
   const t = s.timing, m = s.music;
   const status = r.ok === r.total ? h('span', { class: 'chip ok' }, `Narration ready · ${r.total} messages`)
@@ -121,20 +125,21 @@ async function card(s) {
       ? h('div', { class: 'meta' }, `${t.rounds} rounds: `, h('b', {}, s.plan.rounds.map((r) => fmtSong(S.sumMs(r))).join(' · ')), ` · ${t.breakMin} min cool-downs · ${fmtDur(S.totalMs(s))}`)
       : h('div', { class: 'meta' }, `${t.rounds} × ${t.roundMin} min · ${t.breakMin} min cool-downs · ${fmtDur(S.totalMs(s))}`),
     h('div', { class: 'meta' }, 'Heat: ', h('b', {}, m.heat ? m.heat.name : 'not chosen'), m.cool ? [' · Cool-down: ', h('b', {}, m.cool.name)] : null),
-    h('div', { class: 'meta' }, 'Voice: ', h('b', {}, s.voice.name), ` · ${s.voice.modelId.replace(/_/g, ' ')}`),
+    h('div', { class: 'meta' }, 'Voice: ', h('b', {}, s.voice.name.replace(/ - .*/, '')), ` · ${s.voice.modelId.replace(/_/g, ' ')}`, s.lang && s.lang !== 'en' ? ` · ${langOf(s.lang).native}` : ''),
     h('div', { class: 'meta', style: { marginTop: '8px' } }, status, s.lastRunAt ? h('span', { class: 'muted small', style: { marginLeft: '8px' } }, 'Last run ' + fmtDate(s.lastRunAt)) : null),
     h('div', { class: 'meta row', style: { marginTop: '6px' } },
       h('span', { class: 'chip' + (pl.n ? ' ok' : '') }, pl.n === 1 ? '▶ 1 play' : `▶ ${pl.n} plays`),
       (s.inserts || []).length ? h('span', { class: 'chip' }, `${s.inserts.length} message${s.inserts.length === 1 ? '' : 's'} in songs`) : null,
-      shared ? h('span', { class: 'chip info' }, `Shared by ${shared.by}`) : null));
+      shared ? h('span', { class: 'chip shared' }, `Shared · ${viewer ? 'viewer' : 'collaborator'}`) : out ? h('span', { class: 'chip shared' }, `Shared with ${out}`) : null,
+      shared ? h('span', { class: 'chip' }, `by ${shared.owner}`) : null));
   const foot = h('div', { class: 'scard-foot' },
     h('button', { class: 'primary small', onclick: () => app.show('live', s.id) }, 'Run'),
-    h('button', { class: 'small', onclick: () => app.show('editor', s.id) }, 'Edit'),
+    viewer ? null : h('button', { class: 'small', onclick: () => app.show('editor', s.id) }, 'Edit'),
     h('span', { class: 'spacer' }),
-    h('button', { class: 'small ghost', onclick: async () => { await S.duplicate(s); toast('Duplicated.'); render(); } }, 'Duplicate'),
-    h('button', { class: 'small ghost', onclick: () => exportSession(s) }, 'Export'),
+    viewer ? null : h('button', { class: 'small ghost', onclick: async () => { await S.duplicate(s); toast('Duplicated.'); render(); } }, 'Duplicate'),
+    viewer ? null : h('button', { class: 'small ghost', onclick: () => exportSession(s) }, 'Export'),
     h('button', { class: 'small ghost danger', onclick: async () => {
-      if (!confirm(shared ? `Remove “${s.name}” from your sessions? It stays with ${shared.by}.` : `Delete “${s.name}” and its recorded narration?`)) return;
+      if (!confirm(shared ? `Remove “${s.name}” from your sessions? It stays with ${shared.owner}.` : `Delete “${s.name}” and its recorded narration?`)) return;
       await S.remove(s); toast(shared ? 'Removed.' : 'Deleted.'); render();
     } }, shared ? 'Remove' : 'Delete'));
   return h('article', { class: 'scard' }, art, body, foot);

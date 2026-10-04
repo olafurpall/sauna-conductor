@@ -1,5 +1,5 @@
 // Boot: settings dialog, status pills, migration from v1, first view.
-import { $, $$, h, toast, uid, sleep, diagnostics } from './util.js';
+import { $, $$, h, toast, uid, sleep, diagnostics, store } from './util.js';
 import { app, cfg, saveCfg, legacyCfg, VERSION, DEFAULT_CLIENT_ID } from './app.js';
 import * as db from './db.js';
 import * as S from './sessions.js';
@@ -11,9 +11,14 @@ import { liveView } from './live.js';
 import { sessionView } from './overview.js';
 import { timelineView } from './timeline.js';
 import { preview } from './preview.js';
-import { cloud, initCloud, pushElevenKey, cloudSummary } from './cloud.js';
+import { cloud, initCloud, cloudSummary, callFunction } from './cloud.js';
 import { initAccount, paintAccount } from './account.js';
+import { welcomeView, onboardView, route, holdRoute, onboarded, takeLinkFromUrl, afterSpotifyRedirect } from './gate.js';
+import { registerServiceWorker } from './pwa.js';
 
+registerServiceWorker();
+app.register('welcome', welcomeView);
+app.register('onboard', onboardView);
 app.register('library', libraryView);
 app.register('editor', editorView);
 app.register('live', liveView);
@@ -25,7 +30,7 @@ preview.isRunning = () => liveView.running;
 $$('.tab').forEach((t) => t.addEventListener('click', () => app.show(t.dataset.view)));
 app.on('view', (v) => $$('.tab').forEach((t) => t.classList.toggle('active', t.dataset.view === v || (['editor', 'session', 'timeline'].includes(v) && t.dataset.view === 'library'))));
 app.on('view', (v) => { if (v === 'live' || v === 'library') preview.stop(); });
-$$('.pill').forEach((p) => p.addEventListener('click', () => app.openSettings(p.dataset.sec)));
+$$('header .pill[data-sec]').forEach((p) => p.addEventListener('click', () => app.openSettings(p.dataset.sec)));
 
 function renderPills() {
   const sp = $('#pillSpotify');
@@ -38,7 +43,10 @@ function renderPills() {
   else { sp.textContent = player.mode === 'connect' ? 'Spotify: choose device' : 'Spotify starting…'; sp.classList.add('warn'); }
   const el = $('#pillEleven');
   el.className = 'pill';
-  if (!eleven.hasKey) el.textContent = 'ElevenLabs: add key';
+  // On the hosted site narration goes through the server: only the admin sees the credits.
+  el.hidden = eleven.server && !cloud.admin;
+  if (eleven.server) { el.textContent = 'ElevenLabs' + (elInfo ? ' · ' + elInfo : ''); el.classList.add(elOk === false ? 'warn' : 'ok'); el.dataset.sec = 'set-eleven-server'; }
+  else if (!eleven.hasKey) el.textContent = 'ElevenLabs: add key';
   else { el.textContent = 'ElevenLabs' + (elInfo ? ' · ' + elInfo : ''); el.classList.add(elOk === false ? 'warn' : 'ok'); }
 }
 let elInfo = '', elOk = null;
@@ -67,6 +75,9 @@ function paintSettings() {
     : 'Connected' + (auth.me && auth.me.display_name ? ' as ' + auth.me.display_name : '') + '.';
   $('#btnConnect').textContent = auth.connected ? 'Reconnect Spotify' : 'Connect Spotify';
   $('#cfgElKey').value = eleven.key;
+  $('#set-eleven').hidden = eleven.server;
+  $('#set-eleven-server').hidden = !(eleven.server && cloud.admin);
+  $('#elServerDetail').textContent = elInfo ? `ElevenLabs: ${elInfo} this month.` : '';
   $$('input[name=output]').forEach((r) => { r.checked = r.value === cfg.output; });
   $('#deviceRow').hidden = cfg.output !== 'connect';
   const sel = $('#cfgDevice');
@@ -90,6 +101,7 @@ $('#btnConnect').addEventListener('click', () => { cfg.clientId = $('#cfgClientI
 $('#btnDisconnect').addEventListener('click', () => { logout(true); paintSettings(); renderPills(); });
 
 async function checkEleven(showToast) {
+  if (eleven.server && !cloud.admin) { elInfo = ''; elOk = null; app.emit('eleven'); return; }
   if (!eleven.hasKey) { elInfo = ''; elOk = null; $('#elDetail').textContent = ''; app.emit('eleven'); return; }
   $('#elDetail').textContent = 'Checking…';
   try {
@@ -108,7 +120,7 @@ async function checkEleven(showToast) {
   }
   app.emit('eleven');
 }
-$('#btnElSave').addEventListener('click', () => { eleven.key = $('#cfgElKey').value; pushElevenKey(); checkEleven(true); });
+$('#btnElSave').addEventListener('click', () => { eleven.key = $('#cfgElKey').value; checkEleven(true); });
 $('#btnElShow').addEventListener('click', (e) => {
   const i = $('#cfgElKey');
   i.type = i.type === 'password' ? 'text' : 'password';
@@ -171,7 +183,14 @@ cloud.isRunning = () => liveView.running;
 initAccount({ isRunning: () => liveView.running });
 app.on('cloud-data', () => { if (app.current === 'library') libraryView.enter(); });
 app.on('cloud-runs', () => { if (app.current === 'library') libraryView.enter(); });
-app.on('cloud-eleven', () => { if ($('#settings').open) $('#cfgElKey').value = eleven.key; checkEleven(false); });
+// On the hosted site, ElevenLabs is reached through the server function, with the app's key.
+if (cloud.configured && location.protocol !== 'file:') {
+  eleven.transport = (method, path, body, signal) => callFunction('eleven', { method, path, body }, signal);
+  eleven.ready = () => cloud.signedIn;
+  store.del('elkey'); store.del('elkeyAt');            // a key from older versions is no longer needed here
+}
+app.on('people', () => { eleven.admin = cloud.admin; checkEleven(false); renderPills(); });
+app.on('auth', ({ signedIn }) => { if (!signedIn) { elInfo = ''; renderPills(); } });
 app.on('cloud-spotify', (sp) => {
   if (liveView.running) return;
   if (adoptLogin(sp)) { toast('Spotify connected from your account.', 3000); if (!cfg.demo) player.restart(); renderPills(); }
@@ -234,18 +253,27 @@ if (bc) {
 // ---------------------------------------------------------------- boot
 $('#appVersion').textContent = 'Version ' + VERSION;
 async function boot() {
-  if (bc) { bc.postMessage({ type: 'hello', id: TAB_ID }); await sleep(300); if (takeoverRefused) return; }
+  if (bc) { bc.postMessage({ type: 'hello', id: TAB_ID }); await sleep(300); if (takeoverRefused) { document.body.classList.remove('booting'); return; } }
+  takeLinkFromUrl();
+  const q0 = new URLSearchParams(location.search);
+  holdRoute(q0.has('code') && !q0.has('sb'));          // back from Spotify: decide after the login is checked
   try { await initCloud(); } catch (e) { console.error(e); }
-  try { await handleRedirect(); } catch (e) { toast(e.message, 8000); }
+  let fromSpotify = false;
+  try { fromSpotify = await handleRedirect(); } catch (e) { toast(e.message, 8000); }
+  holdRoute(false);
   try { await migrate(); } catch (e) { console.error(e); }
   renderPills();
   if (auth.connected && !cfg.demo) player.start();
-  if (eleven.hasKey) checkEleven(false);
-  await app.show('library');
-  if (cloud.configured && !cloud.signedIn && cloud.status !== 'starting') {
-    let none = false;
-    try { none = !(await db.sessions.all()).length; } catch { /* ignore */ }
-    if (none) app.openSettings('set-account');
-  } else if (!auth.connected && !cfg.clientId && !cfg.demo) app.openSettings('set-spotify');
+  if (eleven.hasKey && !eleven.server) checkEleven(false);
+  try {
+    if (cloud.configured && location.protocol !== 'file:') {
+      // The front page, first-time setup, a shared link, or the sessions.
+      if (fromSpotify && cloud.signedIn && !onboarded()) await afterSpotifyRedirect();
+      else await route();
+    } else {
+      await app.show('library');
+      if (!auth.connected && !cfg.clientId && !cfg.demo) app.openSettings('set-spotify');
+    }
+  } finally { document.body.classList.remove('booting'); }
 }
 boot();

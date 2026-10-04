@@ -2,6 +2,7 @@
 // narration at each phase) to place extra messages anywhere, even in the middle of a song.
 // A message is recorded with the session's voice, dragged to its spot, and given its own music
 // dip and narrator volume. "Hear it in place" plays the song there with the message on top.
+import { roleOf } from './cloud.js';
 import { $, h, toast, fmtSong, clamp, sleep } from './util.js';
 import { app } from './app.js';
 import * as db from './db.js';
@@ -25,6 +26,7 @@ const ZOOMS = [0.15, 0.2, 0.3, 0.5, 0.75, 1, 1.5, 2, 3, 4, 6, 8, 12, 16];
 export const timelineView = {
   el,
   async enter(id) {
+    if (roleOf(id || (s && s.id)) === 'viewer') { toast('You can run this session but not change it.'); app.show('session', id || s.id); return; }
     const x = await db.sessions.get(id || (s && s.id));
     if (!x) { toast('That session no longer exists.'); app.show('library'); return; }
     if (!s || s.id !== x.id) { px = null; timelineView._scroll = 0; }
@@ -406,7 +408,7 @@ async function hearInPlace(ins) {
 
 // ---------------------------------------------------------------- recording one message
 async function recordInsert(ins) {
-  if (!eleven.hasKey) { toast('Add your ElevenLabs API key in Settings first.'); app.openSettings('set-eleven'); return; }
+  if (!eleven.hasKey) { toast(eleven.missingMsg); if (!eleven.server) app.openSettings('set-eleven'); return; }
   const text = (ins.text || '').trim();
   if (!text) { toast('Write the message first.'); return; }
   recording = ins.id;

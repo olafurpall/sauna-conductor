@@ -2,13 +2,14 @@
 // narration at each phase) to place extra messages anywhere, even in the middle of a song.
 // A message is recorded with the session's voice, dragged to its spot, and given its own music
 // dip and narrator volume. "Hear it in place" plays the song there with the message on top.
-import { $, h, toast, fmtSong, clamp, sleep } from './util.js?v=2.5.1-24e6cfcc';
-import { app } from './app.js?v=2.5.1-24e6cfcc';
-import * as db from './db.js?v=2.5.1-24e6cfcc';
-import * as S from './sessions.js?v=2.5.1-24e6cfcc';
-import { eleven, clipKey, prepText, isV3 } from './eleven.js?v=2.5.1-24e6cfcc';
-import { preview } from './preview.js?v=2.5.1-24e6cfcc';
-import { player } from './spotify.js?v=2.5.1-24e6cfcc';
+import { roleOf } from './cloud.js?v=3.0-152b544c';
+import { $, h, toast, fmtSong, clamp, sleep } from './util.js?v=3.0-152b544c';
+import { app } from './app.js?v=3.0-152b544c';
+import * as db from './db.js?v=3.0-152b544c';
+import * as S from './sessions.js?v=3.0-152b544c';
+import { eleven, clipKey, prepText, isV3 } from './eleven.js?v=3.0-152b544c';
+import { preview } from './preview.js?v=3.0-152b544c';
+import { player } from './spotify.js?v=3.0-152b544c';
 
 const el = $('#view-timeline');
 let s = null;
@@ -25,6 +26,7 @@ const ZOOMS = [0.15, 0.2, 0.3, 0.5, 0.75, 1, 1.5, 2, 3, 4, 6, 8, 12, 16];
 export const timelineView = {
   el,
   async enter(id) {
+    if (roleOf(id || (s && s.id)) === 'viewer') { toast('You can run this session but not change it.'); app.show('session', id || s.id); return; }
     const x = await db.sessions.get(id || (s && s.id));
     if (!x) { toast('That session no longer exists.'); app.show('library'); return; }
     if (!s || s.id !== x.id) { px = null; timelineView._scroll = 0; }
@@ -406,7 +408,7 @@ async function hearInPlace(ins) {
 
 // ---------------------------------------------------------------- recording one message
 async function recordInsert(ins) {
-  if (!eleven.hasKey) { toast('Add your ElevenLabs API key in Settings first.'); app.openSettings('set-eleven'); return; }
+  if (!eleven.hasKey) { toast(eleven.missingMsg); if (!eleven.server) app.openSettings('set-eleven'); return; }
   const text = (ins.text || '').trim();
   if (!text) { toast('Write the message first.'); return; }
   recording = ins.id;

@@ -4,9 +4,11 @@ import { $, h, toast, fmtSong, fmtDur, fmtDate, download, slug } from './util.js
 import { app } from './app.js';
 import * as db from './db.js';
 import * as S from './sessions.js';
+import { langOf } from './script.js';
 import { preview, previewButton } from './preview.js';
-import { cloud, sharedWithMe } from './cloud.js';
-import { openShareDialog } from './share.js';
+import { cloud, sharedWithMe, roleOf, sharedOut } from './cloud.js';
+import { openInviteDialog } from './invite.js';
+import { openLinkDialog } from './sharelink.js';
 
 const el = $('#view-session');
 let s = null;
@@ -86,35 +88,43 @@ function editable(tag, cls, value, placeholder, onSave, maxlength) {
 function render() {
   el.innerHTML = '';
   const shared = sharedWithMe(s.id);
+  const role = roleOf(s.id);
+  const viewer = role === 'viewer';
   const pl = S.plays(s);
   const songs = S.songMode(s);
   const t = s.timing;
+  const out = sharedOut(s.id);
 
   const btn = (label, cls, fn, title) => h('button', { class: cls, onclick: fn, title }, label);
   const actions = h('div', { class: 'row ov-actions' },
     btn('Run', 'primary', () => app.show('live', s.id)),
-    btn('Edit', '', () => app.show('editor', { id: s.id, from: 'session' })),
-    btn('Timeline', '', () => (songs ? app.show('timeline', s.id) : toast('The timeline needs planned rounds. Edit the session and press Suggest rounds.')), 'Place messages inside songs'),
-    cloud.signedIn ? btn('Share', '', () => openShareDialog(s), 'Invite people to work on this session') : null,
+    viewer ? null : btn('Edit', '', () => app.show('editor', { id: s.id, from: 'session' })),
+    viewer ? null : btn('Timeline', '', () => (songs ? app.show('timeline', s.id) : toast('The timeline needs planned rounds. Edit the session and press Suggest rounds.')), 'Place messages inside songs'),
+    cloud.signedIn && !viewer ? btn('Invite', '', () => openInviteDialog(s), 'Invite people as collaborators or viewers') : null,
+    cloud.signedIn && !viewer ? btn('Share link', '', () => openLinkDialog(s), 'A link for Facebook, Instagram or a message') : null,
     h('span', { class: 'spacer' }),
-    shared ? btn('Make my own copy', 'small ghost', async () => { const c = await S.duplicate(s); c.name = s.name; await S.save(c); toast('Copied into your own sessions.'); app.show('session', c.id); })
+    viewer ? null : shared ? btn('Make my own copy', 'small ghost', async () => { const c = await S.duplicate(s); c.name = s.name; await S.save(c); toast('Copied into your own sessions.'); app.show('session', c.id); })
       : btn('Duplicate', 'small ghost', async () => { const c = await S.duplicate(s); toast('Duplicated.'); app.show('session', c.id); }),
-    btn('Export', 'small ghost', async () => { try { download(`${slug(s.name)}.sauna.json`, await S.exportFile(s)); toast('Exported with its narration.'); } catch (e) { toast(e.message); } }),
+    viewer ? null : btn('Export', 'small ghost', async () => { try { download(`${slug(s.name)}.sauna.json`, await S.exportFile(s)); toast('Exported with its narration.'); } catch (e) { toast(e.message); } }),
     btn(shared ? 'Remove' : 'Delete', 'small ghost danger', async () => {
-      if (!confirm(shared ? `Remove “${s.name}” from your sessions? It stays with ${shared.by}.` : `Delete “${s.name}” and its recorded narration?`)) return;
+      if (!confirm(shared ? `Remove “${s.name}” from your sessions? It stays with ${shared.owner}.` : `Delete “${s.name}” and its recorded narration?${out ? ` The ${out} ${out === 1 ? 'person' : 'people'} it’s shared with lose it too.` : ''}`)) return;
       await S.remove(s); toast(shared ? 'Removed.' : 'Deleted.'); app.show('library');
     }));
 
-  const name = editable('h1', 'ov-name', s.name, 'Name this session', async (v) => { s.name = v || 'Untitled session'; await save(); render(); toast('Renamed.', 1500); }, 80);
-  const notes = editable('p', 'ov-notes', s.notes, '+ Add notes: what this session is for, the mood, who it suits', async (v) => { s.notes = v; await save(); render(); }, 200);
+  const name = viewer ? h('h1', { class: 'ov-name' }, s.name || 'Untitled session')
+    : editable('h1', 'ov-name', s.name, 'Name this session', async (v) => { s.name = v || 'Untitled session'; await save(); render(); toast('Renamed.', 1500); }, 80);
+  const notes = viewer ? (s.notes ? h('p', { class: 'ov-notes' }, s.notes) : null)
+    : editable('p', 'ov-notes', s.notes, '+ Add notes: what this session is for, the mood, who it suits', async (v) => { s.notes = v; await save(); render(); }, 200);
 
   const chips = h('div', { class: 'row ov-chips' },
+    shared ? h('span', { class: 'chip shared' }, `Shared · ${role === 'viewer' ? 'viewer' : 'collaborator'}`) : out ? h('span', { class: 'chip shared' }, `Shared with ${out}`) : null,
+    h('span', { class: 'chip' }, 'Owner: ' + (shared ? shared.owner : 'you')),
     h('span', { class: 'chip' + (pl.n ? ' ok' : '') }, pl.n === 1 ? '▶ 1 play' : `▶ ${pl.n} plays`),
     pl.last ? h('span', { class: 'chip' }, 'Last played ' + fmtDate(pl.last)) : null,
     h('span', { class: 'chip' }, songs ? fmtDur(S.totalMs(s)) : `${t.rounds} × ${t.roundMin} min`),
     h('span', { class: 'chip' }, `${t.rounds} round${t.rounds === 1 ? '' : 's'} · ${t.breakMin} min cool-downs`),
-    h('span', { class: 'chip' }, 'Voice: ' + s.voice.name),
-    shared ? h('span', { class: 'chip info' }, `Shared by ${shared.by}`) : null);
+    h('span', { class: 'chip' }, 'Voice: ' + s.voice.name.replace(/ - .*/, '')),
+    s.lang && s.lang !== 'en' ? h('span', { class: 'chip' }, langOf(s.lang).native) : null);
 
   el.append(
     h('div', { class: 'ov-top' }, h('button', { class: 'ghost small', onclick: () => app.show('library') }, '← Sessions'), actions),
@@ -152,7 +162,7 @@ function flow() {
     for (const song of songs || []) { ol.append(...songRow(song, limitMs != null && at >= limitMs)); at += song.durationMs; }
     return h('section', { class: 'ov-phase ' + kind },
       h('div', { class: 'rhead' }, h('b', {}, title), h('span', { class: 'rdur' }, dur), theme ? h('span', { class: 'ov-theme' }, theme) : null,
-        h('span', { class: 'spacer' }), h('button', { class: 'small ghost', onclick: () => app.show('editor', { id: s.id, from: 'session', section: editSec }) }, 'Edit')),
+        h('span', { class: 'spacer' }), roleOf(s.id) === 'viewer' ? null : h('button', { class: 'small ghost', onclick: () => app.show('editor', { id: s.id, from: 'session', section: editSec }) }, 'Edit')),
       cueRow(cueId, cueTitle),
       songs ? ol : h('p', { class: 'muted small' }, kind === 'round' ? 'Plays the heat playlist.' : S.songMode(s) ? 'Plays the cool-down songs (not planned yet; Edit to choose them).' : `Plays “${s.music.cool ? s.music.cool.name : s.music.heat ? s.music.heat.name : 'the playlist'}”.`));
   };

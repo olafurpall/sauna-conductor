@@ -536,3 +536,106 @@ dialog.share-dlg input[type=email] { flex: 1 1 260px; min-width: 0; }
 .sp-adv[open] summary { margin-bottom: 4px; }
 #spCustom { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin: 10px 0 0; }
 #spCustom[hidden] { display: none; }
+
+/* ================================================================ version 3 */
+/* ---- start-up: signed-out visitors see only the front page */
+body.booting header.top, body.booting .view, body.booting .banner { visibility: hidden; }
+body.gate header.top .tabs, body.gate header.top .pill, body.gate #btnSettings, body.gate .acct { display: none !important; }
+body.gate header.top { justify-content: center; }
+.brand { display: inline-flex; align-items: center; gap: 10px; }
+.brand-mark { border-radius: 6px; flex: none; }
+
+/* ---- front page and onboarding */
+.gate-wrap { display: grid; place-items: start center; padding: 2vh 16px 64px; }
+.gate-card { width: min(560px, 100%); background: linear-gradient(180deg, rgba(255,138,61,.07), rgba(255,255,255,.02) 40%); border: 1px solid var(--line); border-radius: 22px; padding: 34px 32px 28px; text-align: center; box-shadow: 0 30px 80px rgba(0,0,0,.45); }
+.gate-logo { width: 88px; height: 88px; border-radius: 22px; box-shadow: 0 0 60px rgba(255,138,61,.28); }
+.gate-brand { font-family: var(--display); font-weight: 600; letter-spacing: .32em; text-transform: uppercase; font-size: 14px; margin: 18px 0 6px; }
+.gate-brand span { color: var(--heat); }
+.gate-title { font-family: var(--sans); font-weight: 500; font-size: clamp(22px, 4.6vw, 28px); line-height: 1.25; letter-spacing: 0; margin: 10px auto 22px; max-width: 30ch; }
+.gate-actions { display: grid; gap: 12px; justify-items: center; }
+button.big { padding: 14px 22px; font-size: 16px; border-radius: 12px; min-width: min(320px, 100%); }
+.gate-google { display: inline-flex; align-items: center; justify-content: center; gap: 12px; --accent: var(--text); }
+.gate-google .g { display: inline-grid; place-items: center; width: 24px; height: 24px; border-radius: 50%; background: #fff; color: #4285f4; font-weight: 700; font-family: var(--sans); font-size: 15px; }
+.gate-email { width: min(420px, 100%); text-align: left; }
+.gate-email summary { cursor: pointer; color: var(--muted); font-size: 13px; text-align: center; list-style: none; }
+.gate-email summary::-webkit-details-marker { display: none; }
+.gate-email[open] summary { margin-bottom: 10px; }
+.gate-email .row input { flex: 1 1 200px; min-width: 0; }
+.gate-msg { min-height: 1.2em; margin: 10px 0 0; }
+.gate-points { list-style: none; padding: 0; margin: 22px 0 8px; display: grid; gap: 10px; text-align: left; font-size: 14px; color: #c9c3b8; }
+.gate-points li { padding-left: 22px; position: relative; line-height: 1.45; }
+.gate-points li::before { content: ""; position: absolute; left: 4px; top: 7px; width: 7px; height: 7px; border-radius: 50%; background: var(--heat); box-shadow: 0 0 10px var(--heat); }
+.gate-points b { color: var(--text); font-weight: 600; }
+.gate-fine { margin: 18px 0 0; line-height: 1.5; }
+.gate-fine a { color: var(--text); }
+.gate-link { text-align: left; border: 1px solid rgba(255,138,61,.35); background: rgba(255,138,61,.07); border-radius: 14px; padding: 14px 16px; margin: 0 0 20px; display: grid; gap: 4px; }
+.gate-link-name { font-family: var(--display); font-size: 20px; letter-spacing: .02em; }
+.gate-inapp { text-align: left; margin: 0 0 18px; }
+.gate-card .install-btn { margin-top: 18px; }
+.onb { text-align: left; }
+.onb h1 { font-family: var(--sans); font-weight: 500; letter-spacing: 0; font-size: clamp(22px, 4.8vw, 28px); margin: 6px 0 10px; }
+.onb-lead { font-size: 16px; color: #d6d0c4; margin: 0 0 18px; }
+.onb .big { margin: 6px 0 14px; }
+.onb .f { margin-top: 10px; }
+.onb-steps { list-style: none; display: flex; gap: 6px; padding: 0; margin: 0 0 20px; flex-wrap: wrap; counter-reset: st; }
+.onb-steps li { counter-increment: st; font-size: 12px; color: var(--muted); border: 1px solid var(--line); border-radius: 999px; padding: 4px 11px 4px 6px; display: inline-flex; align-items: center; gap: 7px; }
+.onb-steps li::before { content: counter(st); display: inline-grid; place-items: center; width: 18px; height: 18px; border-radius: 50%; background: var(--panel2); font-size: 11px; }
+.onb-steps li.done { color: var(--ok); border-color: rgba(111,227,161,.3); }
+.onb-steps li.done::before { content: "✓"; background: rgba(111,227,161,.15); }
+.onb-steps li.on { color: var(--text); border-color: rgba(255,138,61,.5); }
+.onb-steps li.on::before { background: var(--heat); color: #0b0b0d; }
+a.btn { display: inline-flex; align-items: center; justify-content: center; font: inherit; font-size: 13px; color: var(--text); background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 7px 12px; text-decoration: none; }
+a.btn.primary { background: var(--heat); color: #0b0b0d; border-color: transparent; font-weight: 600; }
+
+/* ---- account menu */
+.acct { position: relative; }
+.acct-pill { max-width: 22vw; }
+.pill.sync::before { background: var(--cool); }
+.acct-menu { position: absolute; right: 0; top: calc(100% + 8px); z-index: 30; min-width: 240px; background: var(--bg2); border: 1px solid var(--line2); border-radius: 14px; padding: 6px; box-shadow: 0 18px 50px rgba(0,0,0,.5); display: grid; }
+.acct-menu button { text-align: left; background: transparent; border: 0; border-radius: 8px; padding: 10px 12px; font-size: 14px; }
+.acct-menu button:hover { background: var(--panel2); }
+.acct-who { padding: 10px 12px 10px; border-bottom: 1px solid var(--line); margin-bottom: 4px; display: grid; gap: 2px; }
+.acct-who small { color: var(--muted); font-size: 12px; overflow-wrap: anywhere; }
+.acct-who .st { font-size: 11px; }
+#btnSignOutTop { color: var(--danger); }
+
+/* ---- sharing */
+.chip.shared { color: var(--heat); border-color: rgba(255,138,61,.4); background: rgba(255,138,61,.08); }
+.invite-row input[type=email] { flex: 1 1 220px; min-width: 0; }
+.invite-row select, .people select { min-width: 0; width: auto; font-size: 13px; padding: 6px 8px; }
+.link-field { flex: 1 1 260px; min-width: 0; font-family: var(--mono); font-size: 12px; }
+.people li.req .who small { display: block; margin: 2px 0 0; }
+.people li.req .note { font-style: italic; }
+
+/* ---- install */
+.install-btn { display: inline-flex; align-items: center; gap: 10px; }
+.install-btn img { border-radius: 4px; }
+dialog.ios-install { width: min(420px, calc(100vw - 32px)); background: var(--bg2); color: var(--text); border: 1px solid var(--line); border-radius: 18px; padding: 24px; text-align: left; }
+dialog.ios-install img { border-radius: 14px; }
+dialog.ios-install h2 { font-family: var(--sans); letter-spacing: 0; font-size: 20px; margin: 12px 0 6px; }
+dialog.ios-install ol { padding-left: 20px; line-height: 1.6; }
+.ios-share { display: inline-grid; place-items: center; width: 22px; height: 22px; border: 1px solid var(--line2); border-radius: 6px; font-size: 12px; }
+
+/* ---- editor: language, host, AI writer */
+.ed-meta { display: grid; grid-template-columns: minmax(180px, 260px) minmax(160px, 240px); gap: 10px 14px; margin-top: 8px; }
+.ed-meta select { width: 100%; min-width: 0; }
+.ai-box { border: 1px solid rgba(255,138,61,.3); background: linear-gradient(180deg, rgba(255,138,61,.07), rgba(255,138,61,.02)); border-radius: 14px; padding: 14px 16px; margin: 0 0 18px; display: grid; gap: 10px; }
+.ai-head b { color: var(--heat); font-weight: 600; }
+.ai-box textarea { min-height: 96px; }
+.ai-status { flex: 1 1 260px; }
+.label.vrec { margin: 12px 0 4px; }
+
+@media (max-width: 640px) {
+  header.top { padding: 12px 16px; gap: 8px; flex-wrap: wrap; }
+  .brand { letter-spacing: .22em; font-size: 12px; }
+  .tabs { margin-left: 0; }
+  #pillEleven { display: none; }
+  .gate-card { padding: 26px 18px 22px; border-radius: 18px; }
+  .ed-meta { grid-template-columns: 1fr; }
+  .acct-pill { max-width: 40vw; }
+}
+@supports (padding: max(0px)) {
+  header.top { padding-top: max(16px, env(safe-area-inset-top)); }
+}
+header.top { z-index: 20; }          /* the account menu opens over the page */
+.set-sec a, .help a { color: var(--heat); text-underline-offset: 2px; }

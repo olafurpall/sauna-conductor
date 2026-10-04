@@ -2,8 +2,27 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Sauna Conductor</title>
+<meta name="description" content="Guided sauna sessions with your Spotify music and a narrator that leads the way: rounds, cool-downs and check-ins, in your language.">
+<meta name="theme-color" content="#06070a">
+<link rel="icon" href="favicon.ico" sizes="48x48">
+<link rel="icon" href="icons/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<link rel="manifest" href="manifest.webmanifest">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Sauna">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Sauna Conductor">
+<meta property="og:title" content="Sauna Conductor · guided sauna sessions">
+<meta property="og:description" content="Rounds from your Spotify playlists, cool-down songs, and a narrator that welcomes everyone and checks in mid-song. Open the link to run the session.">
+<meta property="og:url" content="https://sauna.roadtalk.io/">
+<meta property="og:image" content="https://sauna.roadtalk.io/icons/og-image.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta name="twitter:card" content="summary_large_image">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@400;500;600&family=IBM+Plex+Mono:wght@200;300;400&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
@@ -13,15 +32,24 @@
 <div class="sky" aria-hidden="true"></div>
 
 <header class="top">
-  <div class="brand">Sauna <span>Conductor</span></div>
+  <div class="brand"><img class="brand-mark" src="icons/icon-32.png" alt="" width="22" height="22">Sauna <span>Conductor</span></div>
   <nav class="tabs" aria-label="Views">
     <button class="tab" data-view="library">Sessions</button>
     <button class="tab" data-view="live" id="tabLive" disabled>Live</button>
   </nav>
   <div class="spacer"></div>
-  <button class="pill" id="pillCloud" data-sec="set-account" hidden>Sign in</button>
+  <button class="pill warn" id="pillRequests" data-sec="set-access" hidden></button>
   <button class="pill" id="pillSpotify" data-sec="set-spotify">Spotify</button>
   <button class="pill" id="pillEleven" data-sec="set-eleven">ElevenLabs</button>
+  <div class="acct" id="acctWrap">
+    <button class="pill" id="pillCloud" hidden aria-haspopup="menu" aria-expanded="false">Sign in</button>
+    <div class="acct-menu" id="acctMenu" role="menu" hidden>
+      <div class="acct-who" id="acctMenuWho"></div>
+      <button role="menuitem" id="btnMenuSettings">Settings</button>
+      <button role="menuitem" id="btnMenuInstall" hidden>Install the app</button>
+      <button role="menuitem" id="btnSignOutTop">Sign out</button>
+    </div>
+  </div>
   <button class="ghost small" id="btnSettings">Settings</button>
 </header>
 
@@ -31,6 +59,10 @@
 <div class="banner" id="fileBanner" hidden>
   You opened <b>index.html</b> directly. Close this tab and double-click <b>Start Sauna Conductor.command</b> instead. The app only works through the launcher.
 </div>
+
+<!-- ============================================================ Front page and first-time setup -->
+<section class="view" id="view-welcome" hidden></section>
+<section class="view" id="view-onboard" hidden></section>
 
 <!-- ============================================================ Sessions -->
 <section class="view" id="view-library" hidden>
@@ -172,30 +204,22 @@
   </div>
   <div class="set-body">
     <section class="set-sec" id="set-account" hidden>
-      <h3>Account and sync</h3>
-      <div id="acctOut" hidden>
-        <p class="help">Sign in to keep your sessions, recorded narration, history and the ElevenLabs key in the cloud: on any computer, and shared with the people you invite. <a href="privacy.html" target="_blank" rel="noopener">Privacy</a></p>
-        <div class="row"><button class="small primary" id="btnGoogle">Continue with Google</button></div>
-        <div class="row mt"><input type="email" id="acctEmail" placeholder="you@example.com" autocomplete="email" spellcheck="false"><button class="small" id="btnEmailLink">Email me a sign-in link</button></div>
-        <p class="muted small mt" id="acctMsg"></p>
-      </div>
-      <div id="acctIn" hidden>
-        <div class="row"><span>Signed in as <b id="acctWho"></b></span><span class="chip" id="acctStatus"></span></div>
-        <div class="grid2 mt">
-          <label class="f">Workspace<select id="acctWs"></select></label>
-          <label class="f">Workspace name<input type="text" id="acctWsName" maxlength="40" spellcheck="false"></label>
-        </div>
-        <div class="label mt">Shared with</div>
-        <ul class="people" id="acctPeople"></ul>
-        <div class="row mt"><input type="email" id="inviteEmail" placeholder="their Gmail address" autocomplete="off" spellcheck="false"><button class="small" id="btnInvite">Invite</button></div>
-        <p class="help mt">They open this page, sign in with that email address, and see everything in the workspace: sessions, recordings, history and the ElevenLabs key. Everyone connects their own Spotify.</p>
-        <div class="row"><button class="small" id="btnSyncNow">Sync now</button><button class="small ghost" id="btnSignOut">Sign out</button><span class="muted small" id="acctLast"></span></div>
-      </div>
+      <h3>Account</h3>
+      <div class="row"><span>Signed in as <b id="acctWho"></b></span><span class="chip" id="acctStatus"></span></div>
+      <p class="help mt">Your sessions are private to you and kept in the cloud, so they're on every device you sign in on. To work on one with others, open it and press <b>Invite</b> or <b>Share link</b>. <a href="privacy.html" target="_blank" rel="noopener">Privacy</a></p>
+      <div class="row"><button class="small" id="btnSyncNow">Sync now</button><button class="small ghost" id="btnSignOut">Sign out</button><span class="muted small" id="acctLast"></span></div>
+      <div class="row mt" id="installRow"></div>
+    </section>
+
+    <section class="set-sec" id="set-access" hidden>
+      <h3>Spotify access</h3>
+      <p class="help">While the Spotify app is in development mode, Spotify lets in only the people on its user list, 5 at most. People Spotify turned away ask here. Add them at <a href="https://developer.spotify.com/dashboard/346821c157414b1c8d0639c5d0cc9df8/users" target="_blank" rel="noopener">developer.spotify.com → Thora sauna conductor → User Management</a> with their Spotify email, then mark them as added: they see it and can connect.</p>
+      <ul class="people" id="accessList"></ul>
     </section>
 
     <section class="set-sec" id="set-spotify">
       <h3>Spotify</h3>
-      <p class="help">Press <b>Connect Spotify</b> and log in with your own Spotify account (Premium). There's nothing else to set up: Sauna Conductor already has its Spotify app. Your Spotify account just has to be on that app's user list, so if Spotify turns you away, ask Ólafur to add the email address you log in to Spotify with. When you're signed in here, your Spotify login is saved in your account, so other computers connect by themselves.</p>
+      <p class="help">Press <b>Connect Spotify</b> and log in with your own Spotify account (Premium). There's nothing else to set up: Sauna Conductor already has its Spotify app. While Sauna Conductor is in beta, Spotify only lets in the people on its guest list: if Spotify turns you away, you'll be asked for the email you use for Spotify so you can be added. Your Spotify login is saved in your account, so your other devices connect by themselves.</p>
       <div class="banner warn" id="spCustom" hidden>This browser is set to a different Spotify app than the shared one, which is why connecting may fail. <button class="small primary" id="btnSharedApp">Use the shared app</button></div>
       <div class="row mt">
         <button class="small primary" id="btnConnect">Connect Spotify</button>
@@ -209,6 +233,12 @@
           <div class="f">Redirect URI (that app needs this)<div class="row"><span class="code" id="redirectUri"></span><button class="small" id="btnCopyRedirect">Copy</button></div></div>
         </div>
       </details>
+    </section>
+
+    <section class="set-sec" id="set-eleven-server" hidden>
+      <h3>Narration (ElevenLabs)</h3>
+      <p class="help">Everyone records narration through the app's server, with your ElevenLabs account. The key stays on the server (Supabase → Edge Functions → Secrets, or the app_secrets table); no browser ever sees it. Each person can record up to 25,000 characters a day; you have no limit. Your own and cloned voices are only for you.</p>
+      <p class="muted small" id="elServerDetail"></p>
     </section>
 
     <section class="set-sec" id="set-eleven">
@@ -248,6 +278,8 @@
 
 <script>
   if (location.protocol === 'file:') document.getElementById('fileBanner').hidden = false;
+  // Signed-out visitors land on the front page: hide the app until it knows (avoids a flash of the app).
+  try { if (!localStorage.getItem('sc.sb-auth') && location.protocol !== 'file:') document.body.classList.add('booting'); } catch (e) { /* ignore */ }
 </script>
 <script type="module" src="js/main.js"></script>
 </body>

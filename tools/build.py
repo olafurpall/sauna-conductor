@@ -22,7 +22,10 @@ def main():
 
     vendor = sorted(p for p in (ROOT / 'js' / 'vendor').rglob('*') if p.is_file()) if (ROOT / 'js' / 'vendor').exists() else []
     pages = [ROOT / 'index.html'] + [p for p in [ROOT / 'privacy.html'] if p.exists()]
-    files = pages + sorted((ROOT / 'css').rglob('*.css')) + sorted(p for p in (ROOT / 'js').rglob('*.js') if p not in vendor) + vendor
+    # The installable app: manifest, service worker, icons (copied unchanged; sw.js gets the version).
+    statics = [p for p in [ROOT / 'manifest.webmanifest', ROOT / 'favicon.ico'] if p.exists()] + sorted(p for p in (ROOT / 'icons').glob('*') if p.is_file())
+    sw = ROOT / 'sw.js'
+    files = pages + sorted((ROOT / 'css').rglob('*.css')) + sorted(p for p in (ROOT / 'js').rglob('*.js') if p not in vendor) + vendor + statics + ([sw] if sw.exists() else [])
     h = hashlib.sha1()
     for f in files:
         h.update(f.relative_to(ROOT).as_posix().encode())
@@ -41,8 +44,11 @@ def main():
         rel = f.relative_to(ROOT)
         dst = out / rel
         dst.parent.mkdir(parents=True, exist_ok=True)
-        if f in vendor:                      # third-party files are copied unchanged
+        if f in vendor or f in statics:      # third-party files and images are copied unchanged
             shutil.copyfile(f, dst)
+            continue
+        if f == sw:                          # a new version replaces the cached app
+            dst.write_text(f.read_text().replace("const VERSION = 'dev';", f"const VERSION = '{tag}';"))
             continue
         text = f.read_text()
         if f.suffix == '.js':

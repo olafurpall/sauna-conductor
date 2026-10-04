@@ -1,6 +1,6 @@
 // Share one session with collaborators: they see it in their Sessions and can edit and run it.
-import { h, toast } from './util.js?v=2.5.1-24e6cfcc';
-import { cloud, listShares, addShare, removeShare, sharedWithMe } from './cloud.js?v=2.5.1-24e6cfcc';
+import { h, toast } from './util.js?v=3.0-152b544c';
+import { cloud, listShares, addShare, removeShare, sharedWithMe } from './cloud.js?v=3.0-152b544c';
 
 export async function openShareDialog(s) {
   if (!cloud.signedIn) { toast('Sign in first (Settings → Account and sync).'); return; }

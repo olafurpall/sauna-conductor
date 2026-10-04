@@ -1,48 +1,39 @@
 # Sauna Conductor
 
-Runs a whole sauna session from one laptop: Spotify playlists, a recorded narrator between rounds, and the clock.
+Runs a whole sauna session: Spotify playlists, a recorded narrator between rounds and inside songs, and the clock.
 
 - **Sessions** you build once and replay exactly: playlists, timing, levels, voice and every recorded message.
-- **Session creator**: pick playlists from your Spotify, edit every narration message, choose and preview an ElevenLabs voice, then record.
+- **Session creator**: pick playlists from your Spotify, choose the narration language, let the AI write the narration from a description (or write it yourself), choose and preview a voice, then record.
 - **Live view**: round timer, music that dips under the narrator, song controls (previous / pause / next), and an *Up next* list you can click to jump.
-- **Playlists with Claude**: export your Spotify library, send it to Claude, import the playlists Claude builds.
-- **Sign in and share**: your sessions, recordings, history and the ElevenLabs key follow you to any computer, and Thora sees the same ones. Single sessions can be shared with collaborators too.
 - **Session page and timeline**: every session at a glance with play counts; preview any song; place extra messages anywhere, even in the middle of a song.
+- **Private by default, easy to share**: everyone has their own sessions. Invite people as collaborators or viewers, or post a link.
+- **An app on your phone**: install it from the browser for a home-screen icon.
+- **Playlists with Claude**: export your Spotify library, send it to Claude, import the playlists Claude builds.
 
-**Open it at <https://sauna.roadtalk.io>** in Chrome on a computer.
+**Open it at <https://sauna.roadtalk.io>.**
 
 ---
 
-## Setup
+## Getting started
 
-### 1. Sign in
+1. Open <https://sauna.roadtalk.io> and press **Continue with Google**. (Email sign-in is there too, but see *For the administrator*.)
+2. The first time, there's one step: **Connect Spotify**. Log in with your own Spotify Premium account and press **Agree**. Nobody needs a Spotify app, a Client ID or an ElevenLabs key.
+3. If Spotify turns you away, the app asks for the email you use for Spotify and sends a request to the admin, who adds you (Spotify allows 5 people while the app is in beta). Come back and press **Try again**. You can look around and plan sessions meanwhile.
 
-Open <https://sauna.roadtalk.io>. The first time, Settings opens on **Account and sync**:
+Your Spotify login is saved in your account (only you can read it), so your other devices connect by themselves.
 
-- **Continue with Google** (once Google sign-in is switched on, see *For the administrator* below), or
-- type your email and press **Email me a sign-in link**, then open the link **in the same browser**.
+The header shows your name; click it for **Settings**, **Install the app** and **Sign out**. Signing out leaves nothing of yours on that device; your sessions come back when you sign in again.
 
-The header shows **Synced · Ólafur** when everything is in the cloud.
+### Install it as an app
 
-### 2. Invite Thora
+- **Android, and Chrome or Edge on a computer**: press **Install the app** (on the front page, in the menu under your name, or in Settings → Account). One tap, and Sauna Conductor gets its own icon and opens full screen.
+- **iPhone and iPad**: in **Safari**, press **Add to Home Screen** for the two steps: Share ⬆︎ → *Add to Home Screen*. (Apple only allows this from Safari.)
 
-**Settings → Account and sync → Shared with**: type Thora's Gmail address and press **Invite**. She opens <https://sauna.roadtalk.io>, signs in with that address, and sees every session, recording and the run history. Invite her before her first sign-in. Otherwise she starts in a workspace of her own, and you pick the shared one under *Workspace*.
+On a phone the music plays through the Spotify app: open Spotify once, then choose it under Settings → *Where the music plays*. The narration plays from the phone.
 
-### 3. Connect Spotify (each person, once)
+### Opened from Instagram or Facebook?
 
-**Settings → Spotify → Connect Spotify**, log in with your own Spotify Premium account and press **Agree**. Nobody needs their own Spotify app or Client ID: everyone uses the shared one, *Thora sauna conductor*. Your Spotify login is saved in your account (only you can read it), so your other computers connect by themselves.
-
-Spotify only lets accounts on the app's user list in: <https://developer.spotify.com/dashboard> → *Thora sauna conductor* → **User Management** → add the name and the email the person logs in to Spotify with (up to 5). If someone is turned away, it's almost always because the email there doesn't match their Spotify login.
-
-If Settings → Spotify shows *"This browser is set to a different Spotify app"*, press **Use the shared app**, then Connect Spotify.
-
-### 4. Add the ElevenLabs API key (once, for everyone)
-
-1. Go to **elevenlabs.io → Developers → API keys → Create key**.
-2. Give it access to **Text to Speech**, **Voices** (read and write), **Models**, and **User** (read). Setting a monthly credit limit on the key is a good idea.
-3. Paste it in **Settings → ElevenLabs** and press **Save and check**. The pill at the top shows how many credits you have left.
-
-When you're signed in, the key is shared with your workspace, so Thora records with the same ElevenLabs account.
+Their built-in browsers don't allow Google sign-in. The page says so and shows how to open it in Safari or Chrome (••• → *Open in browser*).
 
 ### Bringing over sessions from the launcher version
 
@@ -68,12 +59,12 @@ Double-click **Start Sauna Conductor.command** (approve it once under System Set
 Everything about one session in order: each round and cool-down with its message (▶ plays the recording) and its songs (▶ previews a song), and any messages placed inside songs.
 
 - Click the **name** or the **notes** to change them.
-- **Run**, **Edit**, **Timeline**, **Share**, Duplicate, Export, Delete.
+- **Run**, **Edit**, **Timeline**, **Invite**, **Share link**, Duplicate, Export, Delete. A viewer only sees **Run** (and **Remove**).
 - Each round and cool-down has its own **Edit**, which opens the editor at that part.
 
 ## Creating a session
 
-**Sessions → New session**, then name it (the cursor starts in the name box) and add notes if you like. The links under the name jump to each part: Music, Rounds, Cool-downs, Voice, Narration, Levels. Then:
+**Sessions → New session**, then name it (the cursor starts in the name box), add notes if you like, and choose the **narration language** and **who leads the heat** (see *Narration in Icelandic* below). The links under the name jump to each part: Music, Rounds, Cool-downs, Voice, Narration, Levels. Then:
 
 1. **Music**: choose the heat playlist and, optionally, a cool-down playlist from your Spotify. You can also paste a playlist link. Turn on *Fade between songs* for softer song changes.
 2. **Rounds**: choose how a round's length is decided.
@@ -149,31 +140,49 @@ The conductor saves where it is every two seconds (and, when signed in, reports 
 3. Claude sends back a playlist file. **Import playlists from Claude** creates them in your Spotify (private).
 4. Pick them in any session.
 
-## Sharing one session with collaborators
+## Sharing a session
 
-Everyone in your workspace (e.g. Thora) already has every session. To work on **one** session with someone else:
+Your sessions are private. Open one and use:
 
-1. Open the session → **Share** → type their email address (the one they'll sign in with) → **Invite**.
-2. They open <https://sauna.roadtalk.io> and sign in with that address. The session shows up in their Sessions, marked **Shared by Ólafur**.
-3. They can change the songs, the narration and the messages inside songs, and run it. Their changes reach you, and yours reach them. Their plays count on the session too.
-4. **Make my own copy** gives them a separate copy that's theirs alone. **Remove** takes it out of their Sessions; it stays with you. Only your workspace can delete it.
+- **Invite**: type someone's email (the one they sign in with) and choose
+  - **Collaborator**: can change songs, narration and messages, run it, invite others, and make their own copy;
+  - **Viewer**: can only run it.
 
-To play music they need Spotify Premium and their Spotify account on the app's user list (developer.spotify.com → User Management, at most 5 people). To record new narration they need an ElevenLabs key in their own Settings.
+  It shows up in their Sessions marked **Shared · collaborator** or **Shared · viewer**, with the owner's name. You can change someone's role or remove them in the same window. Your own shared sessions say **Shared with 2** (etc.).
+- **Share link**: makes a link for Facebook, Instagram or a message (**Copy**, **Share…** on phones, or **Facebook**; for an Instagram story, copy the link and add it with the *Link* sticker). Whoever opens it signs in, connects Spotify, and the session opens for them as a viewer. The link preview shows the Sauna Conductor image. **Stop this link** turns it off; people who already opened it keep the session.
+
+Only the owner can delete a session. Others can **Remove** it from their own Sessions.
+
+## Narration in Icelandic (and other languages)
+
+At the top of the session creator, choose **Narration language** and fill in **Who leads the heat** (the host's name, used in the texts).
+
+- **English and Icelandic** have built-in texts. Other languages (Danish, Swedish, Norwegian, Finnish, German, Polish, Spanish, French) start in English; use the AI writer below.
+- Icelandic needs **Eleven v3** or newer: Multilingual v2 and Flash don't speak Icelandic, and the editor warns if one is chosen.
+- **Change voice** shows voices recommended for the language first. For Icelandic these are native Reykjavík-accent voices from the ElevenLabs library: **Ingibjorg** (calm, warm; the default), **Katrin** (warm, patient), **Sigrun** (calm narrator), **Bjorn** and **Gunnar** (deep, calm narrators) and **Baldur** (patient). ▶ plays a sample. Listen to two or three before you choose.
+
+### Write the narration with AI
+
+Under **Narration**, describe your group and the mood in your own words, for example:
+
+> My name is Júlía and I'm hosting a session for 12 girlfriends from school. We love Icelandic hip hop. Keep it short and warm, mostly the basic instructions.
+
+Tick **Short check-ins at the start of each song** to add a message at the start of every song (after the first in each round) saying how many minutes are left in the round. Press **Write narration**: Claude writes every message in the session's language in about a minute. Nothing is recorded yet. Read it through, change anything, then press **Create session** to record. Check-ins appear under *Messages inside songs* and on the timeline, where you can move them.
 
 ## Sync, sharing and backups
 
-- Signed in, every change is uploaded within seconds and other computers pick it up when they open the page, come back to it, or every two minutes. **Settings → Account and sync → Sync now** does it immediately.
+- Signed in, every change is uploaded within seconds and other computers pick it up when they open the page, come back to it, or every two minutes. **Settings → Account → Sync now** does it immediately.
 - Without internet the conductor keeps working from this browser's copy. The header shows **Offline**, and everything syncs when the connection is back.
 - If two people change the same session, the most recent save wins.
 - **Sign out** keeps the sessions on this computer.
 - **Export** on a session card saves one file with everything, including the recorded narration. **Import session** restores it exactly. A good extra backup.
 
-**What is stored where.** In the cloud (Supabase, Europe): sessions, recordings, run history, plays and the ElevenLabs key, readable only by members of your workspace (and a shared session also by the people it's shared with); your Spotify login, readable only by you. The security rules are in `supabase/schema.sql`.
+**What is stored where.** In the cloud (Supabase, Europe): your sessions, recordings, run history and plays, readable only by you (and a shared session also by the people it's shared with); your Spotify login, readable only by you. The ElevenLabs and Anthropic keys are only on the server; no browser ever sees them. The security rules are in `supabase/schema.sql`.
 
 ## Troubleshooting
 
 - **The sign-in link says it didn't work**: open the emailed link in the same browser where you asked for it (on the same computer).
-- **"Sync problem"** in the header: open Settings → Account and sync to see the reason, then press **Sync now**. Copy diagnostics if it persists.
+- **"Sync problem"** in the header: open Settings → Account to see the reason, then press **Sync now**. Copy diagnostics if it persists.
 - **Something odd happened during a session**: Settings → **Copy diagnostics**, then paste it into the chat with Claude. It lists what the conductor asked Spotify to play and what actually played (no keys or passwords).
 - **Old songs keep popping up between rounds**: earlier versions used Spotify's own queue for "+1 song", and those songs can still be sitting there. In the Spotify app, open the queue and press **Clear queue** once.
 - **Still seeing the old version** (no *Sessions | Live* tabs, or Settings doesn't show the latest version number): close every old Sauna Conductor Terminal window, start the launcher again, and press Cmd+Shift+R in Chrome. The launcher stops an older copy by itself.
@@ -182,7 +191,8 @@ To play music they need Spotify Premium and their Spotify account on the app's u
 - **"Invalid redirect URI"**: the Spotify app's Redirect URIs must include the exact address you use: `https://sauna.roadtalk.io/` or `http://127.0.0.1:8888/` (both are already added).
 - **Spotify says the user isn't registered**: add that Spotify account under User Management in the Spotify developer dashboard (step 3).
 - **Nothing plays**: the Spotify account needs Premium. In *Spotify app* mode, make sure the app is open and the device is picked in Settings.
-- **ElevenLabs "missing permissions"**: edit the API key's permissions (see setup step 4).
+- **"You've used today's narration allowance"**: each person can record 25,000 characters a day; it starts again the next day. The admin has no limit.
+- **"The AI writer is not set up yet"**: the admin needs to add the `ANTHROPIC_API_KEY` secret (see *For the administrator*).
 - **A voice can't be used**: library voices are added to *My voices* when you pick them. That needs the *Voices: write* permission, and your plan has a limit on how many library voices you can add.
 - Use Chrome on a computer. Phones and tablets can't run the Spotify web player.
 
@@ -190,10 +200,15 @@ To play music they need Spotify Premium and their Spotify account on the app's u
 
 ## For the administrator
 
-- **Hosting**: GitHub Pages from the `docs/` folder of <https://github.com/olafurpall/sauna-conductor>, at `sauna.roadtalk.io` (a CNAME record at IONOS points `sauna` to `olafurpall.github.io`). After changing the app, run `python3 tools/build.py --cname sauna.roadtalk.io` and push. The build adds a version to every file name so browsers never mix old and new files.
-- **Supabase** project *sauna-conductor* (organization Roadtalk). The schema and security rules are in `supabase/schema.sql` (safe to run again; version 2.5 added shared sessions and play counts, applied on 3 October 2026). The app's address and publishable key are in `js/config.js`.
-- **Google sign-in**: Google Cloud project *Sauna Conductor* (account olafurpall@gmail.com, separate from TARS) → Google Auth Platform: app *Sauna Conductor*, External, **In production**, web client *Web client 1* with redirect URI `https://cldzrjlznhyswfzylxsl.supabase.co/auth/v1/callback`. Its Client ID and secret are in Supabase → Authentication → Sign In / Providers → Google. If the secret is ever lost, add a new one under Google Auth Platform → Clients and paste it there.
-- **Spotify users**: Þóra (thora@munum.is) is on the app's User Management list. Spotify allows up to 5.
-- **Privacy page**: `privacy.html` (linked from the sign-in screen and Google's consent screen).
-- **Email links**: Supabase's built-in email only sends to members of the Supabase organization, a few per hour. For anyone else use Google, or set up your own email sender under Supabase → Authentication → Emails → SMTP.
-- **Who can sign up**: anyone who signs in gets their own empty workspace and can't see yours. To close the door completely, turn off *Allow new users to sign up* in Supabase → Authentication → Sign In / Providers once everyone has signed in once. New collaborators then can't sign in until you turn it back on.
+- **Hosting**: GitHub Pages from the `docs/` folder of <https://github.com/olafurpall/sauna-conductor>, at `sauna.roadtalk.io` (a CNAME record at IONOS points `sauna` to `olafurpall.github.io`). After changing the app, run `python3 tools/build.py --cname sauna.roadtalk.io` and push. The build adds a version to every file name, and to the service worker, so phones and browsers pick up a new version at once.
+- **Supabase** project *sauna-conductor* (organization Roadtalk). The schema and security rules are in `supabase/schema.sql` (safe to run again). Version 3 (applied 4 October 2026) made spaces private: Þóra keeps all of Ólafur's sessions as a collaborator. It also added share roles, links, access requests and daily limits, and moved the ElevenLabs key into the server-only `app_secrets` table. The app's address and publishable key are in `js/config.js`.
+- **Server functions** (Supabase → Edge Functions), source in `supabase/functions/`. Both are deployed with **Verify JWT off**, because they check the signed-in person themselves:
+  - `eleven`: all ElevenLabs calls, with the key from `app_secrets` (or the `ELEVENLABS_API_KEY` secret). Each person can record **25,000 characters a day** (`TTS_DAILY_CHARS`) and add 10 library voices a day (`VOICE_ADDS_DAILY`); the admin has no limit. Voices you made or cloned in your own ElevenLabs account are only for you; others can use library and stock voices.
+  - `write`: the AI writer (Claude), with the **`ANTHROPIC_API_KEY`** secret (Supabase → Edge Functions → Secrets). 20 writes per person per day (`AI_DAILY_CALLS`); model `claude-opus-5-5` (`WRITER_MODEL`).
+  - Usage per person and day is in the `usage_daily` table.
+- **Admin**: the first person who set up the app (Ólafur, in `app_admins`). The admin sees ElevenLabs credits in the header, and **Spotify access requests** (header: *1 waiting for Spotify*; Settings → *Spotify access*).
+- **Letting someone into Spotify**: <https://developer.spotify.com/dashboard> → *Thora sauna conductor* → **User Management** → add their name and the **Spotify email** from the request (5 people at most), then press **Mark as added** in Settings. They see it and press Try again. If someone is turned away anyway, the email on the list doesn't match their Spotify login. Opening the app to everyone needs Spotify's *extended quota*, which Spotify now gives only to registered businesses with 250,000 monthly users.
+- **Google sign-in**: Google Cloud project *Sauna Conductor* (account olafurpall@gmail.com, separate from TARS) → Google Auth Platform: app *Sauna Conductor*, External, **In production**, web client *Web client 1* with redirect URI `https://cldzrjlznhyswfzylxsl.supabase.co/auth/v1/callback`. Its Client ID and secret are in Supabase → Authentication → Sign In / Providers → Google.
+- **Email sign-in**: Supabase's built-in email only reaches members of the Supabase organization, a few per hour, so others are told to use Google. To open email sign-in to everyone, add an email sender under Supabase → Authentication → Emails → SMTP (e.g. Resend).
+- **Privacy page**: `privacy.html` (linked from the front page and Google's consent screen).
+- **Who can sign up**: anyone. A new person gets their own empty space and sees nothing of anyone else's until it's shared with them.

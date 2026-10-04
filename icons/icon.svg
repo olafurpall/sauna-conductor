@@ -1,0 +1,38 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <title>Sauna Conductor</title>
+  <defs>
+    <radialGradient id="bg" cx="50%" cy="58%" r="70%">
+      <stop offset="0" stop-color="#2a140c"/>
+      <stop offset=".55" stop-color="#110a0a"/>
+      <stop offset="1" stop-color="#06070a"/>
+    </radialGradient>
+    <linearGradient id="arc" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#ffc46b"/>
+      <stop offset=".5" stop-color="#ff8a3d"/>
+      <stop offset="1" stop-color="#e2412f"/>
+    </linearGradient>
+    <linearGradient id="outer" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#ffb347"/>
+      <stop offset=".45" stop-color="#ff7a2e"/>
+      <stop offset="1" stop-color="#d9361f"/>
+    </linearGradient>
+    <linearGradient id="inner" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#fff1c2"/>
+      <stop offset=".6" stop-color="#ffd27a"/>
+      <stop offset="1" stop-color="#ff9a3d"/>
+    </linearGradient>
+    <radialGradient id="glow" cx="50%" cy="62%" r="40%">
+      <stop offset="0" stop-color="#ff8a3d" stop-opacity=".55"/>
+      <stop offset="1" stop-color="#ff8a3d" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+  <rect width="512" height="512" rx="112" fill="url(#bg)"/>
+  <circle cx="256" cy="270" r="170" fill="url(#glow)"/>
+  <!-- the session ring: faint track, glowing progress -->
+  <circle cx="256" cy="256" r="196" fill="none" stroke="#ffffff" stroke-opacity=".08" stroke-width="18"/>
+  <path d="M256 60 A196 196 0 1 1 79.9 342" fill="none" stroke="url(#arc)" stroke-width="18" stroke-linecap="round"/>
+  <circle cx="79.9" cy="342" r="7" fill="#79c3ff"/>
+  <!-- the flame -->
+  <path d="M256 104 C 300 166 360 212 360 300 C 360 366 314 412 256 412 C 198 412 152 366 152 300 C 152 250 178 214 204 186 C 208 226 224 252 248 262 C 232 210 234 156 256 104 Z" fill="url(#outer)"/>
+  <path d="M260 236 C 290 270 318 296 318 340 C 318 376 292 400 258 400 C 224 400 198 376 198 342 C 198 312 214 292 232 276 C 234 298 244 312 258 318 C 250 292 248 262 260 236 Z" fill="url(#inner)"/>
+</svg>

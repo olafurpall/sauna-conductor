@@ -1,13 +1,15 @@
 // Session creator / editor: playlists, timing, voice, editable narration, recording.
-import { $, $$, h, toast, fmtDur, fmtSong, autosize, pickFile, sleep, now } from './util.js?v=2.5.1-24e6cfcc';
-import { planRounds, planBreaks } from './planner.js?v=2.5.1-24e6cfcc';
-import { app, cfg } from './app.js?v=2.5.1-24e6cfcc';
-import * as db from './db.js?v=2.5.1-24e6cfcc';
-import * as S from './sessions.js?v=2.5.1-24e6cfcc';
-import { cuePlan, defaultText } from './script.js?v=2.5.1-24e6cfcc';
-import { eleven, isV3, clipKey, prepText } from './eleven.js?v=2.5.1-24e6cfcc';
-import { auth, myPlaylists, parseUri, playlistInfo, sourceTracks, searchTracks } from './spotify.js?v=2.5.1-24e6cfcc';
-import { preview, previewButton } from './preview.js?v=2.5.1-24e6cfcc';
+import { $, $$, h, toast, fmtDur, fmtSong, autosize, pickFile, sleep, now, store } from './util.js?v=3.0-152b544c';
+import { planRounds, planBreaks } from './planner.js?v=3.0-152b544c';
+import { app, cfg } from './app.js?v=3.0-152b544c';
+import * as db from './db.js?v=3.0-152b544c';
+import * as S from './sessions.js?v=3.0-152b544c';
+import { cuePlan, defaultText, LANGS, langOf, hasBuiltInText } from './script.js?v=3.0-152b544c';
+import { eleven, isV3, clipKey, prepText } from './eleven.js?v=3.0-152b544c';
+import { cloud, roleOf } from './cloud.js?v=3.0-152b544c';
+import { writeNarration, applyNarration, checkinSlots } from './writer.js?v=3.0-152b544c';
+import { auth, myPlaylists, parseUri, playlistInfo, sourceTracks, searchTracks } from './spotify.js?v=3.0-152b544c';
+import { preview, previewButton } from './preview.js?v=3.0-152b544c';
 
 const el = $('#view-editor');
 let s = null;            // the session being edited
@@ -36,12 +38,15 @@ export const editorView = {
     const id = o.id || null;
     returnTo = o.from === 'session' && id ? 'session' : 'library';
     if (id) {
+      if (roleOf(id) === 'viewer') { toast('You can run this session but not change it.'); app.show('session', id); return; }
       s = await db.sessions.get(id);
       if (!s) { toast('That session no longer exists.'); app.show('library'); return; }
       saved = true;
       recs = await db.clips.forSession(s.id);
     } else {
-      s = S.newSession();
+      const lang = store.get('lastLang', 'en');
+      s = S.newSession({ lang, host: (cloud.name || '').split(/[\s@]/)[0] || '' });
+      if (lang !== 'en') useLanguageVoice(s);
       saved = false;
       recs = {};
     }
@@ -108,9 +113,64 @@ function head() {
   name.addEventListener('input', () => { s.name = name.value; touch(); });
   const notes = h('input', { type: 'text', class: 'ed-notes', value: s.notes || '', 'aria-label': 'Notes', placeholder: 'Notes: what this session is for, the mood, who it suits…', maxlength: 200 });
   notes.addEventListener('input', () => { s.notes = notes.value; touch(); });
+  const lang = h('select', { class: 'ed-lang', 'aria-label': 'Narration language' },
+    ...LANGS.map((l) => h('option', { value: l.code, selected: l.code === (s.lang || 'en') }, l.code === 'en' ? 'English' : `${l.native} (${l.name})`)));
+  lang.addEventListener('change', () => setLanguage(lang.value));
+  const host = h('input', { type: 'text', class: 'ed-host', value: s.host || '', maxlength: 40, placeholder: 'e.g. Þóra', 'aria-label': 'Who leads the heat' });
+  host.addEventListener('change', () => setHost(host.value.trim()));
   return h('div', { class: 'ed-head' },
     h('button', { class: 'ghost small', onclick: goBack }, returnTo === 'session' ? '← Session' : '← Sessions'),
-    h('div', { class: 'ed-names' }, h('label', { class: 'ed-lab' }, 'Session name'), name, notes));
+    h('div', { class: 'ed-names' }, h('label', { class: 'ed-lab' }, 'Session name'), name, notes,
+      h('div', { class: 'ed-meta' },
+        h('label', { class: 'f' }, 'Narration language', lang),
+        h('label', { class: 'f' }, 'Who leads the heat', host))));
+}
+
+// ---------------------------------------------------------------- language and host
+// Untouched default texts follow the language and the host's name; edited texts are left alone.
+function rewriteDefaults(oldOpts) {
+  const R = s.timing.rounds, min = s.timing.roundMin;
+  let kept = 0;
+  for (const c of S.cues(s)) {
+    if (s.script[c.id] === defaultText(c.id, R, min, oldOpts)) s.script[c.id] = defaultText(c.id, R, min, S.textOpts(s));
+    else kept++;
+  }
+  return kept;
+}
+
+// A voice and model that speak the language.
+function useLanguageVoice(x) {
+  const rec = S.RECOMMENDED_VOICES[x.lang];
+  if (!S.modelSpeaks(x.voice.modelId, x.lang)) x.voice.modelId = 'eleven_v3';
+  if (rec && !rec.some((v) => v.id === x.voice.id) && (x.voice.id === S.DEFAULT_VOICE.id || !(x.voice.labels || []).join(' ').toLowerCase().includes(langOf(x.lang).name.toLowerCase()))) {
+    const v = rec[0];
+    Object.assign(x.voice, { id: v.id, name: v.name, desc: v.desc, labels: v.labels, previewUrl: '', publicOwnerId: '', lang: x.lang });
+  }
+  x.voice.lang = x.lang;
+}
+
+function setLanguage(code) {
+  const old = S.textOpts(s);
+  s.lang = code;
+  store.set('lastLang', code);
+  const kept = rewriteDefaults(old);
+  useLanguageVoice(s);
+  touch();
+  refreshScript(); paintInserts();
+  if (voicePaint) voicePaint();
+  if (settingsPaint) settingsPaint();
+  if (modelPaint) modelPaint();
+  if (aiPaint) aiPaint();
+  const l = langOf(code);
+  if (!hasBuiltInText(code)) toast(`Press “Write narration” under Narration to get the messages in ${l.native}.`, 6000);
+  else if (kept) toast(`${kept} message${kept === 1 ? '' : 's'} you edited kept their text.`, 5000);
+}
+
+function setHost(name) {
+  const old = S.textOpts(s);
+  s.host = name;
+  rewriteDefaults(old);
+  touch(); refreshScript();
 }
 
 const SECTIONS = [['ed-music', 'Music'], ['ed-timing', 'Rounds'], ['ed-cool', 'Cool-downs'], ['ed-voice', 'Voice'], ['ed-script', 'Narration'], ['ed-levels', 'Levels']];
@@ -264,7 +324,7 @@ function secTiming() {
       if (t.maxMin < t.roundMin) t.maxMin = t.roundMin;
       // Keep untouched default texts in step with the new numbers.
       for (const c of cuePlan(Math.max(oldR, t.rounds))) {
-        if (s.script[c.id] === defaultText(c.id, oldR, oldMin)) s.script[c.id] = defaultText(c.id, t.rounds, t.roundMin);
+        if (s.script[c.id] === defaultText(c.id, oldR, oldMin, S.textOpts(s))) s.script[c.id] = defaultText(c.id, t.rounds, t.roundMin, S.textOpts(s));
       }
       S.ensureScript(s);
       touch();
@@ -519,7 +579,7 @@ function secTiming() {
       touch();
     } catch (e) { planMsg = e.message; s.plan = null; }
     planning = false;
-    renderPlan(); paintTotal();
+    renderPlan(); paintTotal(); refreshInserts();
     if (S.songMode(s)) await planCool(false);
     else renderCool();
   }
@@ -646,6 +706,8 @@ function openSearch(target) {
 // ---------------------------------------------------------------- voice
 let voicePaint = null;
 let settingsPaint = null;
+let modelPaint = null;
+let aiPaint = null;
 
 function secVoice() {
   const sec = h('section', { class: 'ed-sec', id: 'ed-voice' },
@@ -654,8 +716,8 @@ function secVoice() {
 
   if (!eleven.hasKey) {
     sec.append(h('div', { class: 'banner', style: { margin: '0 0 14px' } },
-      'Add your ElevenLabs API key in Settings to browse voices and record narration.',
-      h('div', { class: 'row' }, h('button', { class: 'small primary', onclick: () => app.openSettings('set-eleven') }, 'Open Settings'))));
+      eleven.server ? 'Sign in to browse voices and record narration.' : 'Add your ElevenLabs API key in Settings to browse voices and record narration.',
+      eleven.server ? null : h('div', { class: 'row' }, h('button', { class: 'small primary', onclick: () => app.openSettings('set-eleven') }, 'Open Settings'))));
   }
 
   // model
@@ -671,7 +733,15 @@ function secVoice() {
   };
   fill([{ id: 'eleven_v3', name: 'Eleven v3' }, { id: 'eleven_multilingual_v2', name: 'Eleven Multilingual v2' }]);
   if (eleven.hasKey) eleven.models().then(fill).catch(() => {});
-  model.addEventListener('change', () => { s.voice.modelId = model.value; voiceChanged(); });
+  model.addEventListener('change', () => { s.voice.modelId = model.value; voiceChanged(); if (modelPaint) modelPaint(); });
+  const langWarn = h('div', { class: 'banner warn', style: { margin: '10px 0 0' }, hidden: true });
+  modelPaint = () => {
+    if (![...model.options].some((o) => o.value === s.voice.modelId)) model.prepend(h('option', { value: s.voice.modelId }, s.voice.modelId));
+    model.value = s.voice.modelId;
+    const l = langOf(s.lang || 'en');
+    langWarn.hidden = S.modelSpeaks(s.voice.modelId, l.code);
+    langWarn.textContent = `This model doesn't speak ${l.name}. Choose Eleven v3 (or newer) for ${l.native}.`;
+  };
 
   // selected voice card
   const card = h('div', { class: 'voice-card' });
@@ -695,10 +765,11 @@ function secVoice() {
   hear.addEventListener('click', () => recordAndPlay('welcome', hear));
 
   sec.append(
-    h('div', { class: 'row' }, h('label', { class: 'f', style: { flex: '1 1 260px' } }, 'Model', model)),
+    h('div', { class: 'row' }, h('label', { class: 'f', style: { flex: '1 1 260px' } }, 'Model', model)), langWarn,
     h('div', { class: 'mt' }, card), picker, settingsBox,
     h('div', { class: 'row mt' }, hear, h('span', { class: 'muted small' }, 'Records the welcome message, which is then kept for the session.')),
     h('div', { class: 'hint-box', html: 'With <b>Eleven v3</b> you can add delivery cues in square brackets, such as <code>[softly]</code> <code>[warmly]</code> <code>[chuckles]</code> <code>[sighs]</code> <code>[whispers]</code>. Three dots <code>...</code> add a pause. Other models leave the cues out.' }));
+  modelPaint();
   return sec;
 }
 
@@ -743,7 +814,7 @@ async function playSample(v, btn) {
       const mine = await eleven.myVoices();
       url = (mine.find((x) => x.id === v.id) || {}).previewUrl;
       if (!url) {
-        const lib = await eleven.library(v.name);
+        const lib = await eleven.library(v.name.replace(/ - .*/, ''), 0, s.lang || 'en');
         url = ((lib.voices || []).find((x) => x.id === v.id) || {}).previewUrl;
       }
       if (url) v.previewUrl = url;
@@ -755,7 +826,7 @@ async function playSample(v, btn) {
 
 async function openVoicePicker(box) {
   box.innerHTML = '';
-  if (!eleven.hasKey) { box.append(h('div', { class: 'muted small' }, 'Add your ElevenLabs API key in Settings first.')); return; }
+  if (!eleven.hasKey) { box.append(h('div', { class: 'muted small' }, eleven.missingMsg)); return; }
   let tab = 'library';
   const search = h('input', { type: 'search', placeholder: 'Search voices, e.g. “deep narrator”, “southern”, “calm British”' });
   const list = h('div', { class: 'vlist' });
@@ -765,16 +836,27 @@ async function openVoicePicker(box) {
   const setTab = (t) => { tab = t; page = 0; [...tabs.children].forEach((b) => b.classList.toggle('on', b.dataset.t === t)); load(); };
   [['library', 'Voice library'], ['mine', 'My voices']].forEach(([t, lab]) => tabs.append(h('button', { type: 'button', 'data-t': t, onclick: () => setTab(t) }, lab)));
 
+  const lang = s.lang || 'en';
+  const findInLibrary = async (v) => {
+    const r = await eleven.library(v.name.replace(/ - .*/, ''), 0, lang);
+    return (r.voices || []).find((x) => x.id === v.id) || null;
+  };
   const row = (v) => {
-    const play = h('button', { class: 'small', disabled: !v.previewUrl }, '▶');
-    play.addEventListener('click', () => playAudio(v.previewUrl, play));
+    const play = h('button', { class: 'small', disabled: !v.previewUrl && !v.recommended }, '▶');
+    play.addEventListener('click', async () => {
+      if (!v.previewUrl && v.recommended) { const f = await findInLibrary(v).catch(() => null); if (f) { v.previewUrl = f.previewUrl; v.publicOwnerId = f.publicOwnerId; } }
+      if (v.previewUrl) playAudio(v.previewUrl, play); else toast('No sample for this voice.');
+    });
     const use = h('button', { class: 'small primary' }, v.id === s.voice.id ? 'Selected' : 'Use');
     use.disabled = v.id === s.voice.id;
     use.addEventListener('click', async () => {
       use.disabled = true; use.textContent = 'Adding…';
       try {
+        if (v.recommended && !v.publicOwnerId) { const f = await findInLibrary(v); if (f) { v.publicOwnerId = f.publicOwnerId; v.previewUrl = v.previewUrl || f.previewUrl; v.library = true; } }
         if (v.library) await eleven.addShared(v).catch((e) => { if (!/already/i.test(e.message)) throw e; });
-        Object.assign(s.voice, { id: v.id, name: v.name, desc: v.desc, labels: v.labels, previewUrl: v.previewUrl, publicOwnerId: v.publicOwnerId || '' });
+        Object.assign(s.voice, { id: v.id, name: v.name, desc: v.desc, labels: v.labels, previewUrl: v.previewUrl, publicOwnerId: v.publicOwnerId || '', lang });
+        if (!S.modelSpeaks(s.voice.modelId, lang)) s.voice.modelId = 'eleven_v3';
+        if (modelPaint) modelPaint();
         voiceChanged();
         box.hidden = true;
         stopAudio();
@@ -798,11 +880,18 @@ async function openVoicePicker(box) {
         const ql = q.toLowerCase();
         voices = all.filter((v) => !ql || (v.name + ' ' + v.desc + ' ' + v.labels.join(' ')).toLowerCase().includes(ql));
       } else {
-        const r = await eleven.library(q, page);
+        const r = await eleven.library(q, page, lang);
         voices = r.voices; hasMore = r.more;
       }
       if (my !== seq) return;
       if (!append) list.innerHTML = '';
+      const rec = tab === 'library' && !append && !q ? (S.RECOMMENDED_VOICES[lang] || []) : [];
+      if (rec.length) {
+        list.append(h('div', { class: 'label vrec' }, `Recommended for ${langOf(lang).native}`));
+        rec.forEach((v) => list.append(row({ ...v, recommended: true })));
+        voices = voices.filter((v) => !rec.some((x) => x.id === v.id));
+        if (voices.length) list.append(h('div', { class: 'label vrec' }, `More ${langOf(lang).native} voices`));
+      }
       voices.forEach((v) => list.append(row(v)));
       if (!voices.length && !append) list.append(h('div', { class: 'muted small' }, 'No voices found.'));
       more.hidden = !hasMore;
@@ -812,7 +901,8 @@ async function openVoicePicker(box) {
   search.addEventListener('input', () => { clearTimeout(t); t = setTimeout(() => { page = 0; load(); }, 350); });
   more.addEventListener('click', () => { page++; load(true); });
   box.append(h('div', { class: 'row' }, tabs, h('div', { style: { flex: '1 1 260px' } }, search)), list, more);
-  search.value = 'deep narrator';
+  search.value = lang === 'en' ? 'deep narrator' : '';
+  search.placeholder = lang === 'en' ? search.placeholder : `Search ${langOf(lang).name} voices`;
   setTab('library');
 }
 
@@ -828,15 +918,68 @@ function secScript() {
   const sec = h('section', { class: 'ed-sec', id: 'ed-script' },
     h('h2', {}, 'Narration'),
     h('p', { class: 'help' }, 'Edit any message. Each one is recorded as its own clip and plays at the moment shown. You can also drop in your own MP3.'),
-    scriptBox, insertBox);
+    aiBox(), scriptBox, insertBox);
   refreshScript();
   refreshInserts = paintInserts;
   paintInserts();
   return sec;
 }
 
+// ---------------------------------------------------------------- write the narration with AI
+const AI_EXAMPLE = 'Example: My name is Júlía and I’m hosting a session for my friends, a group of 12 girlfriends. We were all in school together and we love Icelandic hip hop. Keep the narration short and warm, mostly the basic instructions.';
+function aiBox() {
+  if (!cloud.configured) { aiPaint = null; return h('div', { hidden: true }); }
+  const box = h('div', { class: 'ai-box' });
+  const prompt = h('textarea', { rows: 4, placeholder: AI_EXAMPLE, spellcheck: true, 'aria-label': 'Describe your session' }, s.aiPrompt || '');
+  prompt.addEventListener('input', () => { s.aiPrompt = prompt.value; touch(); autosize(prompt); });
+  const checks = h('input', { type: 'checkbox', checked: s.aiCheckins !== false });
+  checks.addEventListener('change', () => { s.aiCheckins = checks.checked; touch(); aiPaint(); });
+  const go = h('button', { class: 'primary small' }, 'Write narration');
+  const status = h('span', { class: 'muted small ai-status', role: 'status' });
+  const head = h('div', { class: 'ai-head' });
+  const checkNote = h('span', { class: 'muted small' });
+  let running = null;
+  aiPaint = () => {
+    const l = langOf(s.lang || 'en');
+    head.innerHTML = '';
+    head.append(h('b', {}, '✦ Write the narration with AI'),
+      h('span', { class: 'muted small' }, ` Describe your group and the mood. Claude writes every message in ${l.native}; you read it all before anything is recorded.`));
+    const slots = checkinSlots(s);
+    checks.disabled = !slots.length;
+    checkNote.textContent = slots.length ? `(${slots.length} songs)` : '(plan the rounds first)';
+    go.disabled = !!running || !cloud.signedIn;
+    if (!cloud.signedIn && cloud.configured) status.textContent = 'Sign in to use the AI writer.';
+  };
+  go.addEventListener('click', async () => {
+    const changedTexts = S.cues(s).some((c) => s.script[c.id] !== defaultText(c.id, s.timing.rounds, s.timing.roundMin, S.textOpts(s)));
+    if (changedTexts && !confirm('Replace the current messages with new ones written by the AI? Messages you placed yourself inside songs stay.')) return;
+    const withChecks = !checks.disabled && checks.checked;
+    running = new AbortController();
+    go.disabled = true; go.textContent = 'Writing…';
+    status.textContent = 'Claude is writing your narration. This takes about a minute.';
+    const t0 = Date.now();
+    const tick = setInterval(() => { status.textContent = `Claude is writing your narration… ${Math.round((Date.now() - t0) / 1000)} s`; }, 1000);
+    try {
+      const res = await writeNarration(s, prompt.value, withChecks, running.signal);
+      const n = applyNarration(s, res, withChecks);
+      touch(); refreshScript(); paintInserts();
+      status.textContent = `Done: ${n.msgs} messages${withChecks ? ` and ${n.checks} check-ins` : ''}. Read them through below and change anything, then press Create session to record.`;
+      toast('The narration is written. Read it through before recording.', 5000);
+      setTimeout(() => { const first = $('.cue-ed', el); if (first) first.scrollIntoView({ behavior: 'smooth', block: 'center' }); }, 200);
+    } catch (e) { if (e.name !== 'AbortError') status.textContent = e.message; }
+    clearInterval(tick);
+    running = null; go.textContent = 'Write narration'; aiPaint();
+  });
+  aiPaint();
+  box.append(head, prompt, h('div', { class: 'row' }, h('label', { class: 'chk' }, checks, 'Short check-ins at the start of each song, with the time left in the round'), checkNote),
+    h('div', { class: 'row' }, go, status));
+  setTimeout(() => autosize(prompt), 0);
+  return box;
+}
+
 // Messages placed inside songs (made on the timeline). Their text can be edited here too.
 function paintInserts() {
+  if (aiPaint) aiPaint();
   if (!insertBox) return;
   insertBox.innerHTML = '';
   for (const k of Object.keys(cueEls)) if (k.startsWith('x-')) delete cueEls[k];
@@ -907,7 +1050,7 @@ function cueEditor(c) {
       touch(); paintInserts();
       return;
     }
-    const def = defaultText(c.id, s.timing.rounds, s.timing.roundMin);
+    const def = defaultText(c.id, s.timing.rounds, s.timing.roundMin, S.textOpts(s));
     if (ta.value !== def && !confirm('Replace this message with the original text?')) return;
     ta.value = def; s.script[c.id] = def; autosize(ta); touch(); paint();
   });
@@ -1041,7 +1184,7 @@ async function ttsWithRetry(text, it) {
       return await eleven.tts(text, s.voice, ctrl.signal);
     } catch (e) {
       if (job.cancelled) throw e;
-      const retryable = timedOut || e.network || e.status === 429 || (e.status >= 500);
+      const retryable = timedOut || e.network || (e.status === 429 && e.code !== 'daily_limit') || (e.status >= 500 && e.code !== 'no_key');
       if (attempt < 2 && retryable) { it.state = 'retrying'; it.started = now(); await sleep(2000); it.state = 'recording'; continue; }
       if (timedOut) throw new Error(`ElevenLabs didn't answer within ${TTS_TIMEOUT_MS / 1000} seconds for “${it.title}”. Try again in a moment.`);
       throw e;
@@ -1054,7 +1197,7 @@ async function ttsWithRetry(text, it) {
 
 // Record cues with ElevenLabs. Saves the session first so the clips have a home.
 async function record(ids) {
-  if (!eleven.hasKey) { toast('Add your ElevenLabs API key in Settings first.'); app.openSettings('set-eleven'); return false; }
+  if (!eleven.hasKey) { toast(eleven.missingMsg); if (!eleven.server) app.openSettings('set-eleven'); return false; }
   if (job && !job.result) { toast('A recording is already running.'); return false; }
   closePanel();   // a finished panel from an earlier recording
   const titles = Object.fromEntries(S.allCues(s).map((c) => [c.id, c.title]));
