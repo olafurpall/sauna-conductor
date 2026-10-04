@@ -1,9 +1,9 @@
 // The account button and menu in the header (Settings, Install, Sign out), Settings → Account,
 // and for the admin: Spotify access requests.
-import { $, h, toast } from './util.js?v=3.0-152b544c';
-import { app } from './app.js?v=3.0-152b544c';
-import { cloud, signOut, syncAll, setRequestStatus, refreshPeople } from './cloud.js?v=3.0-152b544c';
-import { installButton, isInstalled } from './pwa.js?v=3.0-152b544c';
+import { $, h, toast } from './util.js?v=3.0.1-b12beced';
+import { app } from './app.js?v=3.0.1-b12beced';
+import { cloud, signOut, syncAll, setRequestStatus, refreshPeople } from './cloud.js?v=3.0.1-b12beced';
+import { installButton, isInstalled } from './pwa.js?v=3.0.1-b12beced';
 
 let isRunning = () => false;
 
@@ -37,7 +37,9 @@ function toggleMenu() {
   const m = $('#acctMenu');
   m.hidden = !m.hidden;
   $('#pillCloud').setAttribute('aria-expanded', String(!m.hidden));
-  $('#btnMenuInstall').hidden = isInstalled() || !document.querySelector('.install-btn:not([hidden])');
+  const inst = document.querySelector('.install-btn:not([hidden])');
+  $('#btnMenuInstall').hidden = isInstalled() || !inst;
+  if (inst) $('#btnMenuInstall').textContent = inst.textContent.trim();   // "Add to Home Screen" on iPhone
 }
 
 export function paintAccount() {

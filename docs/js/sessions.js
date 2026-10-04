@@ -1,8 +1,8 @@
 // Session model: everything needed to replay a sauna session exactly.
-import { uid, blobToBase64, base64ToBlob, fmtSong, store } from './util.js?v=3.0-152b544c';
-import { cuePlan, defaultScript, defaultText } from './script.js?v=3.0-152b544c';
-import { clipKey } from './eleven.js?v=3.0-152b544c';
-import * as db from './db.js?v=3.0-152b544c';
+import { uid, blobToBase64, base64ToBlob, fmtSong, store } from './util.js?v=3.0.1-b12beced';
+import { cuePlan, defaultScript, defaultText } from './script.js?v=3.0.1-b12beced';
+import { clipKey } from './eleven.js?v=3.0.1-b12beced';
+import * as db from './db.js?v=3.0.1-b12beced';
 
 export const DEFAULT_VOICE = {
   id: 'xuiKYsOhCzCAyIdb1aX3', name: 'Clint Brooks',

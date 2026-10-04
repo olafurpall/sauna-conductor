@@ -2,14 +2,14 @@
 // narration at each phase) to place extra messages anywhere, even in the middle of a song.
 // A message is recorded with the session's voice, dragged to its spot, and given its own music
 // dip and narrator volume. "Hear it in place" plays the song there with the message on top.
-import { roleOf } from './cloud.js?v=3.0-152b544c';
-import { $, h, toast, fmtSong, clamp, sleep } from './util.js?v=3.0-152b544c';
-import { app } from './app.js?v=3.0-152b544c';
-import * as db from './db.js?v=3.0-152b544c';
-import * as S from './sessions.js?v=3.0-152b544c';
-import { eleven, clipKey, prepText, isV3 } from './eleven.js?v=3.0-152b544c';
-import { preview } from './preview.js?v=3.0-152b544c';
-import { player } from './spotify.js?v=3.0-152b544c';
+import { roleOf } from './cloud.js?v=3.0.1-b12beced';
+import { $, h, toast, fmtSong, clamp, sleep } from './util.js?v=3.0.1-b12beced';
+import { app } from './app.js?v=3.0.1-b12beced';
+import * as db from './db.js?v=3.0.1-b12beced';
+import * as S from './sessions.js?v=3.0.1-b12beced';
+import { eleven, clipKey, prepText, isV3 } from './eleven.js?v=3.0.1-b12beced';
+import { preview } from './preview.js?v=3.0.1-b12beced';
+import { player } from './spotify.js?v=3.0.1-b12beced';
 
 const el = $('#view-timeline');
 let s = null;
@@ -47,7 +47,7 @@ export const timelineView = {
 };
 
 app.on('cloud-data', async () => {
-  if (app.current !== 'timeline' || !s || saveTimer || recording) return;
+  if (app.current !== 'timeline' || !s || saveTimer || recording || dragOn) return;
   const x = await db.sessions.get(s.id);
   if (!x) return;
   s = S.ensureScript(x); recs = await db.clips.forSession(s.id);
@@ -277,8 +277,10 @@ function dragInsert(b, ins) {
     const at = orig + (dx / px) * 1000;
     const sn = songAt(at);
     if (!sn) { toast('Drop the message on a song.'); render(); return; }
-    ins.uri = sn.song.uri;
-    ins.atMs = clamp(Math.round((at - sn.start) / 500) * 500, 0, Math.max(0, sn.song.durationMs - 1000));
+    // the session may have been reloaded while dragging: move the message in the current copy
+    const cur = (s.inserts || []).find((x) => x.id === ins.id) || ins;
+    cur.uri = sn.song.uri;
+    cur.atMs = clamp(Math.round((at - sn.start) / 500) * 500, 0, Math.max(0, sn.song.durationMs - 1000));
     sel = { type: 'insert', id: ins.id };
     changed(); render();
   };

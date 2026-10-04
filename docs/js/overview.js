@@ -1,14 +1,14 @@
 // Session page: one session at a glance (rounds, cool-downs, narration, messages inside songs),
 // with Run, Edit, Timeline and Share. Songs and messages can be previewed from here.
-import { $, h, toast, fmtSong, fmtDur, fmtDate, download, slug } from './util.js?v=3.0-152b544c';
-import { app } from './app.js?v=3.0-152b544c';
-import * as db from './db.js?v=3.0-152b544c';
-import * as S from './sessions.js?v=3.0-152b544c';
-import { langOf } from './script.js?v=3.0-152b544c';
-import { preview, previewButton } from './preview.js?v=3.0-152b544c';
-import { cloud, sharedWithMe, roleOf, sharedOut } from './cloud.js?v=3.0-152b544c';
-import { openInviteDialog } from './invite.js?v=3.0-152b544c';
-import { openLinkDialog } from './sharelink.js?v=3.0-152b544c';
+import { $, h, toast, fmtSong, fmtDur, fmtDate, download, slug } from './util.js?v=3.0.1-b12beced';
+import { app } from './app.js?v=3.0.1-b12beced';
+import * as db from './db.js?v=3.0.1-b12beced';
+import * as S from './sessions.js?v=3.0.1-b12beced';
+import { langOf } from './script.js?v=3.0.1-b12beced';
+import { preview, previewButton } from './preview.js?v=3.0.1-b12beced';
+import { cloud, sharedWithMe, roleOf, sharedOut } from './cloud.js?v=3.0.1-b12beced';
+import { openInviteDialog } from './invite.js?v=3.0.1-b12beced';
+import { openLinkDialog } from './sharelink.js?v=3.0.1-b12beced';
 
 const el = $('#view-session');
 let s = null;

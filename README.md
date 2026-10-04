@@ -27,7 +27,8 @@ The header shows your name; click it for **Settings**, **Install the app** and *
 ### Install it as an app
 
 - **Android, and Chrome or Edge on a computer**: press **Install the app** (on the front page, in the menu under your name, or in Settings → Account). One tap, and Sauna Conductor gets its own icon and opens full screen.
-- **iPhone and iPad**: in **Safari**, press **Add to Home Screen** for the two steps: Share ⬆︎ → *Add to Home Screen*. (Apple only allows this from Safari.)
+- **iPhone and iPad**: press **Add to Home Screen** to see the steps. In Safari: tap **•••** next to the address bar → **Share** → **Add to Home Screen**, leave *Open as Web App* on and tap **Add**. (Older iPhones show Share ⬆︎ directly in the toolbar.)
+- **Safari on a Mac** (macOS Sonoma or later): press **Add to Dock**, or choose **File → Add to Dock…** in Safari's menu bar.
 
 On a phone the music plays through the Spotify app: open Spotify once, then choose it under Settings → *Where the music plays*. The narration plays from the phone.
 
@@ -102,7 +103,9 @@ During a session the message plays when its song reaches its spot. If a round or
 
 ## Running a session
 
-Press **Run** on a session, check the Spotify pill is green, and press **Start session** when everyone is seated.
+Press **Run** on a session, check the Spotify pill is green, and press **Start session** in the middle of the ring when everyone is seated. If a session was cut off (a closed tab, a flat battery), the ring shows where it stopped and the button there is **Resume**, with **Start over** under it.
+
+The controls sit right under the ring, so on a phone they're on the first screen without scrolling:
 
 | Control | Key | |
 |---|---|---|

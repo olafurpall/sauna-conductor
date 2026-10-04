@@ -1,6 +1,6 @@
 // Invite people to one session by email: collaborators can change it, viewers can only run it.
-import { h, toast } from './util.js?v=3.0-152b544c';
-import { cloud, listShares, addShare, removeShare, setShareRole, sharedWithMe, canEdit } from './cloud.js?v=3.0-152b544c';
+import { h, toast } from './util.js?v=3.0.1-b12beced';
+import { cloud, listShares, addShare, removeShare, setShareRole, sharedWithMe, canEdit } from './cloud.js?v=3.0.1-b12beced';
 
 const ROLE_LABEL = { editor: 'Collaborator', viewer: 'Viewer' };
 const roleSelect = (value, disabled) => {

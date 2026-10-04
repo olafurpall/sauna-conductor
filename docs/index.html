@@ -26,7 +26,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@400;500;600&family=IBM+Plex+Mono:wght@200;300;400&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="css/app.css?v=3.0-152b544c">
+<link rel="stylesheet" href="css/app.css?v=3.0.1-b12beced">
 </head>
 <body class="phase-idle">
 <div class="sky" aria-hidden="true"></div>
@@ -37,20 +37,21 @@
     <button class="tab" data-view="library">Sessions</button>
     <button class="tab" data-view="live" id="tabLive" disabled>Live</button>
   </nav>
-  <div class="spacer"></div>
-  <button class="pill warn" id="pillRequests" data-sec="set-access" hidden></button>
-  <button class="pill" id="pillSpotify" data-sec="set-spotify">Spotify</button>
-  <button class="pill" id="pillEleven" data-sec="set-eleven">ElevenLabs</button>
-  <div class="acct" id="acctWrap">
-    <button class="pill" id="pillCloud" hidden aria-haspopup="menu" aria-expanded="false">Sign in</button>
-    <div class="acct-menu" id="acctMenu" role="menu" hidden>
-      <div class="acct-who" id="acctMenuWho"></div>
-      <button role="menuitem" id="btnMenuSettings">Settings</button>
-      <button role="menuitem" id="btnMenuInstall" hidden>Install the app</button>
-      <button role="menuitem" id="btnSignOutTop">Sign out</button>
+  <div class="hdr-right">
+    <button class="pill warn" id="pillRequests" data-sec="set-access" hidden></button>
+    <button class="pill" id="pillSpotify" data-sec="set-spotify">Spotify</button>
+    <button class="pill" id="pillEleven" data-sec="set-eleven">ElevenLabs</button>
+    <div class="acct" id="acctWrap">
+      <button class="pill" id="pillCloud" hidden aria-haspopup="menu" aria-expanded="false">Sign in</button>
+      <div class="acct-menu" id="acctMenu" role="menu" hidden>
+        <div class="acct-who" id="acctMenuWho"></div>
+        <button role="menuitem" id="btnMenuSettings">Settings</button>
+        <button role="menuitem" id="btnMenuInstall" hidden>Install the app</button>
+        <button role="menuitem" id="btnSignOutTop">Sign out</button>
+      </div>
     </div>
+    <button class="ghost small" id="btnSettings">Settings</button>
   </div>
-  <button class="ghost small" id="btnSettings">Settings</button>
 </header>
 
 <div class="banner" id="storageBanner" hidden>
@@ -132,10 +133,22 @@
           <div class="theme" id="theme"></div>
           <div class="timer" id="timer">15:00</div>
           <div class="sub" id="sub">Press Start when everyone is seated</div>
+          <div class="ring-cta">
+            <button class="primary" id="btnResume" hidden>Resume</button>
+            <button class="primary" id="btnStart">Start session</button>
+          </div>
         </div>
+      </div>
+      <div class="controls" id="liveControls">
+        <button id="btnPause" disabled>Pause</button>
+        <button id="btnNext" disabled>Next phase</button>
+        <button id="btnExtend" disabled>+1 min</button>
+        <button id="btnReplay" disabled title="Replay narration"><span class="long">Replay narration</span><span class="short">Replay</span></button>
+        <button class="danger" id="btnStop" disabled title="End session"><span class="long">End session</span><span class="short">End</span></button>
       </div>
       <div class="timeline" id="timeline"></div>
       <div class="seg-labels" id="segLabels"></div>
+      <div class="hint"><kbd>Space</kbd> pause · <kbd>N</kbd> next phase · <kbd>→</kbd> next song · <kbd>+</kbd> add a minute · <kbd>R</kbd> replay narration</div>
     </section>
 
     <aside class="side">
@@ -181,17 +194,6 @@
       </div>
     </aside>
   </div>
-
-  <footer class="controls">
-    <button class="primary" id="btnResume" hidden>Resume</button>
-    <button class="primary" id="btnStart">Start session</button>
-    <button id="btnPause" disabled>Pause</button>
-    <button id="btnNext" disabled>Next phase</button>
-    <button id="btnExtend" disabled>+1 min</button>
-    <button id="btnReplay" disabled>Replay narration</button>
-    <button class="danger" id="btnStop" disabled>End session</button>
-  </footer>
-  <div class="hint"><kbd>Space</kbd> pause · <kbd>N</kbd> next phase · <kbd>→</kbd> next song · <kbd>+</kbd> add a minute · <kbd>R</kbd> replay narration</div>
 </section>
 
 <!-- ============================================================ Settings -->
@@ -281,6 +283,6 @@
   // Signed-out visitors land on the front page: hide the app until it knows (avoids a flash of the app).
   try { if (!localStorage.getItem('sc.sb-auth') && location.protocol !== 'file:') document.body.classList.add('booting'); } catch (e) { /* ignore */ }
 </script>
-<script type="module" src="js/main.js?v=3.0-152b544c"></script>
+<script type="module" src="js/main.js?v=3.0.1-b12beced"></script>
 </body>
 </html>

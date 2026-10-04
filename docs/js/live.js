@@ -1,11 +1,11 @@
 // Live view: runs a saved session — clock, music phases, narration and song controls.
-import { $, $$, h, sleep, clamp, now, fmt, fmtSong, toast, log, store, uid } from './util.js?v=3.0-152b544c';
-import { app, cfg } from './app.js?v=3.0-152b544c';
-import * as db from './db.js?v=3.0-152b544c';
-import * as S from './sessions.js?v=3.0-152b544c';
-import { cueForRound } from './script.js?v=3.0-152b544c';
-import { player, auth } from './spotify.js?v=3.0-152b544c';
-import { preview } from './preview.js?v=3.0-152b544c';
+import { $, $$, h, sleep, clamp, now, fmt, fmtSong, toast, log, store, uid } from './util.js?v=3.0.1-b12beced';
+import { app, cfg } from './app.js?v=3.0.1-b12beced';
+import * as db from './db.js?v=3.0.1-b12beced';
+import * as S from './sessions.js?v=3.0.1-b12beced';
+import { cueForRound } from './script.js?v=3.0.1-b12beced';
+import { player, auth } from './spotify.js?v=3.0.1-b12beced';
+import { preview } from './preview.js?v=3.0.1-b12beced';
 
 const el = $('#view-live');
 let sess = null;          // loaded session
@@ -619,7 +619,12 @@ function renderResume() {
   const r = !engine.running && sess ? interruptedRun() : null;
   const mine = r && r.sessionId === sess.id;
   btn.hidden = !mine;
-  if (mine) btn.textContent = `Resume ${r.phaseName} (${fmt(r.remaining)} left)`;
+  if (mine) btn.title = `Resume ${r.phaseName} (${fmt(r.remaining)} left)`;
+  // With a run to resume, Resume is the big button in the ring and Start becomes the quieter option.
+  const st = $('#btnStart');
+  st.textContent = mine ? 'Start over' : 'Start session';
+  st.classList.toggle('primary', !mine);
+  st.classList.toggle('ghost', !!mine);
 }
 
 function tick() {
@@ -741,6 +746,7 @@ function render() {
   const body = document.body;
   const p = engine.running ? phase() : null;
   body.classList.toggle('phase-idle', !p);
+  $('.ring-center').classList.toggle('idle', !engine.running && !!sess);
   body.classList.toggle('phase-heat', !!p && p.type === 'round');
   body.classList.toggle('phase-cool', !!p && p.type === 'break');
   body.classList.toggle('phase-done', !!p && p.type === 'closing');
@@ -752,9 +758,11 @@ function render() {
   const theme = $('#theme');
   if (!p) {
     const first = engine.plan[0];
-    $('#kicker').textContent = cfg.demo ? 'Ready for launch · demo' : 'Ready for launch';
-    $('#title').textContent = S.songMode(sess) ? `${t.rounds} rounds of songs` : `${t.rounds} rounds · ${t.roundMin} min`;
-    $('#timer').textContent = fmt(first && first.durMs ? first.durMs : t.roundMin * 60000);
+    const r = interruptedRun();
+    const back = r && r.sessionId === sess.id ? r : null;   // an interrupted run: the ring shows where it stopped
+    $('#kicker').textContent = back ? 'Interrupted' : cfg.demo ? 'Ready for launch · demo' : 'Ready for launch';
+    $('#title').textContent = back ? back.phaseName : S.songMode(sess) ? `${t.rounds} rounds of songs` : `${t.rounds} rounds · ${t.roundMin} min`;
+    $('#timer').textContent = back ? fmt(back.remaining) : fmt(first && first.durMs ? first.durMs : t.roundMin * 60000);
     $('#sub').textContent = 'Press Start when everyone is seated';
     theme.textContent = '';
     prog.style.strokeDashoffset = RING_C;

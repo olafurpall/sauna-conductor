@@ -1,20 +1,20 @@
 // Boot: settings dialog, status pills, migration from v1, first view.
-import { $, $$, h, toast, uid, sleep, diagnostics, store } from './util.js?v=3.0-152b544c';
-import { app, cfg, saveCfg, legacyCfg, VERSION, DEFAULT_CLIENT_ID } from './app.js?v=3.0-152b544c';
-import * as db from './db.js?v=3.0-152b544c';
-import * as S from './sessions.js?v=3.0-152b544c';
-import { auth, login, logout, adoptLogin, handleRedirect, redirectUri, player, listDevices, parseUri } from './spotify.js?v=3.0-152b544c';
-import { eleven } from './eleven.js?v=3.0-152b544c';
-import { libraryView } from './library.js?v=3.0-152b544c';
-import { editorView } from './editor.js?v=3.0-152b544c';
-import { liveView } from './live.js?v=3.0-152b544c';
-import { sessionView } from './overview.js?v=3.0-152b544c';
-import { timelineView } from './timeline.js?v=3.0-152b544c';
-import { preview } from './preview.js?v=3.0-152b544c';
-import { cloud, initCloud, cloudSummary, callFunction } from './cloud.js?v=3.0-152b544c';
-import { initAccount, paintAccount } from './account.js?v=3.0-152b544c';
-import { welcomeView, onboardView, route, holdRoute, onboarded, takeLinkFromUrl, afterSpotifyRedirect } from './gate.js?v=3.0-152b544c';
-import { registerServiceWorker } from './pwa.js?v=3.0-152b544c';
+import { $, $$, h, toast, uid, sleep, diagnostics, store } from './util.js?v=3.0.1-b12beced';
+import { app, cfg, saveCfg, legacyCfg, VERSION, DEFAULT_CLIENT_ID } from './app.js?v=3.0.1-b12beced';
+import * as db from './db.js?v=3.0.1-b12beced';
+import * as S from './sessions.js?v=3.0.1-b12beced';
+import { auth, login, logout, adoptLogin, handleRedirect, redirectUri, player, listDevices, parseUri } from './spotify.js?v=3.0.1-b12beced';
+import { eleven } from './eleven.js?v=3.0.1-b12beced';
+import { libraryView } from './library.js?v=3.0.1-b12beced';
+import { editorView } from './editor.js?v=3.0.1-b12beced';
+import { liveView } from './live.js?v=3.0.1-b12beced';
+import { sessionView } from './overview.js?v=3.0.1-b12beced';
+import { timelineView } from './timeline.js?v=3.0.1-b12beced';
+import { preview } from './preview.js?v=3.0.1-b12beced';
+import { cloud, initCloud, cloudSummary, callFunction } from './cloud.js?v=3.0.1-b12beced';
+import { initAccount, paintAccount } from './account.js?v=3.0.1-b12beced';
+import { welcomeView, onboardView, route, holdRoute, onboarded, takeLinkFromUrl, afterSpotifyRedirect } from './gate.js?v=3.0.1-b12beced';
+import { registerServiceWorker } from './pwa.js?v=3.0.1-b12beced';
 
 registerServiceWorker();
 app.register('welcome', welcomeView);

@@ -1,10 +1,10 @@
 // The way in: the front page (sign in), first-time onboarding (connect Spotify, or ask for access),
 // and opening a shared session link once all that is done.
-import { $, h, toast, store, fmtDur } from './util.js?v=3.0-152b544c';
-import { app, cfg, saveCfg } from './app.js?v=3.0-152b544c';
-import { cloud, signInWithGoogle, signInWithEmail, linkInfo, claimLink, requestAccess, refreshPeople, linkUrl } from './cloud.js?v=3.0-152b544c';
-import { auth, login, getMe, player } from './spotify.js?v=3.0-152b544c';
-import { installButton } from './pwa.js?v=3.0-152b544c';
+import { $, h, toast, store, fmtDur } from './util.js?v=3.0.1-b12beced';
+import { app, cfg, saveCfg } from './app.js?v=3.0.1-b12beced';
+import { cloud, signInWithGoogle, signInWithEmail, linkInfo, claimLink, requestAccess, refreshPeople, linkUrl } from './cloud.js?v=3.0.1-b12beced';
+import { auth, login, getMe, player } from './spotify.js?v=3.0.1-b12beced';
+import { installButton } from './pwa.js?v=3.0.1-b12beced';
 
 const welcomeEl = $('#view-welcome');
 const onboardEl = $('#view-onboard');

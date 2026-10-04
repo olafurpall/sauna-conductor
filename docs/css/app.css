@@ -58,6 +58,7 @@ header.top { display: flex; align-items: center; gap: 14px; padding: 16px 28px; 
 .tab { background: transparent; border: 1px solid transparent; padding: 7px 14px; border-radius: 999px; font-size: 13px; color: var(--muted); }
 .tab.active { color: var(--text); border-color: var(--line); background: var(--panel); }
 .tab:disabled { opacity: .35; }
+.hdr-right { display: flex; align-items: center; gap: 14px; margin-left: auto; min-width: 0; }
 .pill {
   font: inherit; font-size: 12px; color: var(--muted); border: 1px solid var(--line); background: transparent;
   padding: 6px 12px; border-radius: 999px; white-space: nowrap; max-width: 30vw; overflow: hidden; text-overflow: ellipsis; cursor: pointer;
@@ -81,7 +82,7 @@ button.ghost { background: transparent; }
 button.danger { color: var(--danger); }
 button.small { padding: 7px 12px; font-size: 13px; border-radius: 8px; }
 button.icon { width: 44px; height: 44px; padding: 0; border-radius: 50%; display: inline-grid; place-items: center; }
-button.icon.big { width: 54px; height: 54px; background: var(--text); color: #0b0b0d; border-color: transparent; }
+button.icon.big { width: 54px; height: 54px; min-width: 0; padding: 0; border-radius: 50%; background: var(--text); color: #0b0b0d; border-color: transparent; }
 button.icon.big:hover:not(:disabled) { background: var(--text); filter: brightness(1.1); }
 button.icon svg { width: 20px; height: 20px; fill: currentColor; }
 button.icon.big svg { width: 24px; height: 24px; }
@@ -288,10 +289,14 @@ label.radio input { margin-top: 2px; }
 .cue-ed.drag textarea { border-color: var(--text); }
 
 /* ---------------------------------------------------------------- live */
-.live-grid { display: grid; grid-template-columns: minmax(0, 1fr) 340px; gap: 28px; align-items: center; min-height: calc(100vh - 200px); }
+.live-grid { display: grid; grid-template-columns: minmax(0, 1fr) 340px; gap: 28px; align-items: start; }
 .stage { display: flex; flex-direction: column; align-items: center; min-width: 0; }
 .kicker { font-family: var(--display); text-transform: uppercase; letter-spacing: .38em; font-size: 13px; color: var(--accent); transition: color 1.2s ease; margin-bottom: 6px; text-align: center; }
-.ring-wrap { position: relative; width: min(62vh, 540px, 100%); aspect-ratio: 1; }
+/* The ring leaves room for the controls under it on one screen. svh (the smallest viewport height)
+   doesn't change when a phone's browser bars slide in and out, so the layout stays put. */
+.ring-wrap { position: relative; aspect-ratio: 1; container-type: inline-size;
+  width: min(480px, 100%, max(260px, calc(100vh - 290px)));
+  width: min(480px, 100%, max(260px, calc(100svh - 290px))); }
 .ring-glow { position: absolute; inset: 9%; border-radius: 50%; background: conic-gradient(from 0deg, transparent 0 8%, var(--accent) 22%, transparent 40%, transparent 58%, var(--accent) 74%, transparent 90%); filter: blur(38px); opacity: .22; animation: spin 48s linear infinite; transition: opacity 1.2s ease; }
 body.phase-idle .ring-glow { opacity: .1; }
 body.paused .ring-glow { animation-play-state: paused; }
@@ -300,19 +305,29 @@ svg.ring { position: absolute; inset: 0; width: 100%; height: 100%; transform: r
 svg.ring circle { fill: none; }
 .ring .track { stroke: rgba(255,255,255,.07); stroke-width: 2; }
 .ring .prog { stroke: var(--accent); stroke-width: 3; stroke-linecap: round; transition: stroke 1.2s ease; filter: drop-shadow(0 0 6px var(--accent)); }
-.ring-center { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; padding: 18%; }
-.title { font-family: var(--display); font-size: clamp(18px, 2.4vw, 26px); font-weight: 500; letter-spacing: .04em; }
-.timer { font-family: var(--mono); font-weight: 200; font-variant-numeric: tabular-nums; font-size: clamp(60px, 10.5vw, 146px); line-height: 1; letter-spacing: -.02em; margin: 10px 0 12px; }
+.ring-center { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; padding: 16%; }
+.title { font-family: var(--display); font-size: clamp(18px, 2.4vw, 26px); font-size: clamp(16px, 5.4cqi, 26px); font-weight: 500; letter-spacing: .04em; max-width: 100%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.timer { font-family: var(--mono); font-weight: 200; font-variant-numeric: tabular-nums; font-size: clamp(60px, 10.5vw, 146px); font-size: clamp(48px, 23cqi, 118px); line-height: 1; letter-spacing: -.02em; margin: 10px 0 12px; }
 body.paused .timer { animation: blink 1.6s ease-in-out infinite; }
 @keyframes blink { 50% { opacity: .35; } }
-.sub { color: var(--muted); font-size: 14px; min-height: 1.4em; }
-.timeline { display: flex; gap: 4px; width: min(640px, 100%); margin-top: 22px; }
+.sub { color: var(--muted); font-size: 14px; height: 1.4em; max-width: 100%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+/* Before the session starts, Start sits in the middle of the ring. */
+.ring-cta { display: none; flex-direction: column; align-items: center; gap: 8px; }
+.ring-center.idle .ring-cta { display: flex; }
+.ring-center.idle .sub { display: none; }
+.ring-center.idle .timer { margin-bottom: 16px; }
+.ring-cta button { white-space: nowrap; max-width: 80cqi; overflow: hidden; text-overflow: ellipsis; }
+.ring-cta button.primary { padding: 13px 30px; font-size: 16px; font-weight: 600; border-radius: 999px;
+  box-shadow: 0 0 0 6px rgba(255,255,255,.07), 0 10px 34px rgba(255,138,61,.22);
+  box-shadow: 0 0 0 6px color-mix(in srgb, var(--accent) 14%, transparent), 0 10px 34px color-mix(in srgb, var(--accent) 30%, transparent); }
+.ring-cta button.ghost { padding: 8px 16px; font-size: 14px; border-radius: 999px; }
+.timeline { display: flex; gap: 4px; width: min(680px, 100%); margin-top: 22px; }
 .seg { position: relative; height: 6px; border-radius: 3px; background: rgba(255,255,255,.08); overflow: hidden; }
 .seg i { position: absolute; inset: 0 auto 0 0; width: 0; border-radius: 3px; }
 .seg.round i { background: var(--heat); }
 .seg.break i { background: var(--cool); }
 .seg.current { box-shadow: 0 0 0 1px rgba(255,255,255,.25); }
-.seg-labels { display: flex; gap: 4px; width: min(640px, 100%); margin-top: 7px; }
+.seg-labels { display: flex; gap: 4px; width: min(680px, 100%); margin-top: 7px; }
 .seg-labels span { font-family: var(--display); font-size: 11px; letter-spacing: .12em; color: var(--muted); text-align: center; overflow: hidden; white-space: nowrap; }
 
 .side { display: flex; flex-direction: column; gap: 12px; }
@@ -350,9 +365,12 @@ body.paused .timer { animation: blink 1.6s ease-in-out infinite; }
 .narr-when { color: var(--muted); font-size: 13px; margin-top: 6px; }
 .sess-name { font-weight: 600; }
 .total { color: var(--muted); font-size: 13px; font-variant-numeric: tabular-nums; margin-top: 4px; }
-footer.controls { display: flex; flex-wrap: wrap; justify-content: center; gap: 10px; padding: 18px 0 10px; }
-footer.controls button { min-width: 120px; }
-.hint { text-align: center; color: var(--muted); font-size: 12px; }
+/* Session controls sit right under the ring in a fixed grid: changing labels never move them. */
+.controls { display: grid; grid-template-columns: 1fr 1.45fr .95fr 1.45fr 1.15fr; gap: 10px; width: min(680px, 100%); margin-top: 16px; }
+.controls button { min-width: 0; height: 46px; padding: 0 10px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.controls .short { display: none; }
+.hint { text-align: center; color: var(--muted); font-size: 12px; margin-top: 18px; }
+@media (hover: none), (pointer: coarse) { .hint { display: none; } }
 kbd { font-family: var(--mono); font-size: 11px; border: 1px solid var(--line); border-radius: 4px; padding: 1px 5px; }
 
 /* ---------------------------------------------------------------- settings */
@@ -377,7 +395,6 @@ body.editing #toast { bottom: 84px; }
   .view { padding: 8px 16px 40px; }
   .banner { margin: 0 16px 14px; }
   .ed-bar { padding: 12px 16px; }
-  footer.controls button { min-width: 0; flex: 1 1 140px; }
   .pill { max-width: 44vw; }
 }
 @media (prefers-reduced-motion: reduce) {
@@ -627,12 +644,27 @@ dialog.ios-install ol { padding-left: 20px; line-height: 1.6; }
 
 @media (max-width: 640px) {
   header.top { padding: 12px 16px; gap: 8px; flex-wrap: wrap; }
+  /* phones: brand and tabs on the first row, status pills always on their own second row,
+     so a pill whose text changes never re-wraps the header and shifts the page */
+  .hdr-right { flex: 1 0 100%; justify-content: flex-end; gap: 8px; }
+  .hdr-right > * { flex: 0 1 auto; min-width: 0; }
+  .hdr-right .pill { max-width: none; }
+  .acct, .acct .pill { min-width: 0; max-width: 100%; }
+  header.top:has(#pillCloud:not([hidden])) #btnSettings { display: none; }
+  .controls { grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 8px; margin-top: 14px; }
+  #btnPause, #btnNext { grid-column: span 3; }
+  #btnExtend, #btnReplay, #btnStop { grid-column: span 2; }
+  .controls .long { display: none; }
+  .controls .short { display: inline; }
   .brand { letter-spacing: .22em; font-size: 12px; }
   .tabs { margin-left: 0; }
   #pillEleven { display: none; }
   .gate-card { padding: 26px 18px 22px; border-radius: 18px; }
   .ed-meta { grid-template-columns: 1fr; }
-  .acct-pill { max-width: 40vw; }
+}
+@media (max-width: 400px) {
+  .brand { letter-spacing: .14em; font-size: 11px; gap: 7px; }
+  .tab { padding: 7px 11px; }
 }
 @supports (padding: max(0px)) {
   header.top { padding-top: max(16px, env(safe-area-inset-top)); }

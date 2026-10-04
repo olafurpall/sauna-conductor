@@ -1,9 +1,9 @@
 // Song previews while designing a session. A song plays on the Spotify player from a third of the
 // way in (to hear its feel), with a small floating player to pause, scrub and stop. A recorded
 // message can play over the song at its spot, with the music dipping, to hear how it sits.
-import { h, toast, fmtSong, sleep, clamp, log } from './util.js?v=3.0-152b544c';
-import { app, cfg } from './app.js?v=3.0-152b544c';
-import { auth, player } from './spotify.js?v=3.0-152b544c';
+import { h, toast, fmtSong, sleep, clamp, log } from './util.js?v=3.0.1-b12beced';
+import { app, cfg } from './app.js?v=3.0.1-b12beced';
+import { auth, player } from './spotify.js?v=3.0.1-b12beced';
 
 const st = {
   track: null, startedAt: 0, timer: null, el: null, parts: null,

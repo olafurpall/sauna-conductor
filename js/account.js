@@ -37,7 +37,9 @@ function toggleMenu() {
   const m = $('#acctMenu');
   m.hidden = !m.hidden;
   $('#pillCloud').setAttribute('aria-expanded', String(!m.hidden));
-  $('#btnMenuInstall').hidden = isInstalled() || !document.querySelector('.install-btn:not([hidden])');
+  const inst = document.querySelector('.install-btn:not([hidden])');
+  $('#btnMenuInstall').hidden = isInstalled() || !inst;
+  if (inst) $('#btnMenuInstall').textContent = inst.textContent.trim();   // "Add to Home Screen" on iPhone
 }
 
 export function paintAccount() {

@@ -1,7 +1,7 @@
 // Sauna Conductor service worker: makes the app installable and quick to open.
 // Pages come from the network first (so updates show up at once), with the last copy as a fallback
 // when offline. Versioned files (?v=…) never change, so they are served from the cache.
-const VERSION = '3.0-152b544c';                 // replaced by tools/build.py
+const VERSION = '3.0.1-b12beced';                 // replaced by tools/build.py
 const CACHE = 'sc-' + VERSION;
 const SHELL = ['./', './manifest.webmanifest', './icons/icon.svg', './icons/icon-192.png', './icons/icon-512.png', './favicon.ico'];
 

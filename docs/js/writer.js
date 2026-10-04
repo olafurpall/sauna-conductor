@@ -1,10 +1,10 @@
 // "Write the narration with AI": the host describes the session in their own words; Claude (through
 // the server function "write") writes every phase message, and optionally a short check-in at the start
 // of each song with the time left in the round. Nothing is recorded until the host has read it through.
-import * as S from './sessions.js?v=3.0-152b544c';
-import { langOf } from './script.js?v=3.0-152b544c';
-import { isV3 } from './eleven.js?v=3.0-152b544c';
-import { callFunction } from './cloud.js?v=3.0-152b544c';
+import * as S from './sessions.js?v=3.0.1-b12beced';
+import { langOf } from './script.js?v=3.0.1-b12beced';
+import { isV3 } from './eleven.js?v=3.0.1-b12beced';
+import { callFunction } from './cloud.js?v=3.0.1-b12beced';
 
 const minutes = (ms) => Math.round((ms / 60000) * 10) / 10;
 

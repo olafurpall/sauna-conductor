@@ -37,20 +37,21 @@
     <button class="tab" data-view="library">Sessions</button>
     <button class="tab" data-view="live" id="tabLive" disabled>Live</button>
   </nav>
-  <div class="spacer"></div>
-  <button class="pill warn" id="pillRequests" data-sec="set-access" hidden></button>
-  <button class="pill" id="pillSpotify" data-sec="set-spotify">Spotify</button>
-  <button class="pill" id="pillEleven" data-sec="set-eleven">ElevenLabs</button>
-  <div class="acct" id="acctWrap">
-    <button class="pill" id="pillCloud" hidden aria-haspopup="menu" aria-expanded="false">Sign in</button>
-    <div class="acct-menu" id="acctMenu" role="menu" hidden>
-      <div class="acct-who" id="acctMenuWho"></div>
-      <button role="menuitem" id="btnMenuSettings">Settings</button>
-      <button role="menuitem" id="btnMenuInstall" hidden>Install the app</button>
-      <button role="menuitem" id="btnSignOutTop">Sign out</button>
+  <div class="hdr-right">
+    <button class="pill warn" id="pillRequests" data-sec="set-access" hidden></button>
+    <button class="pill" id="pillSpotify" data-sec="set-spotify">Spotify</button>
+    <button class="pill" id="pillEleven" data-sec="set-eleven">ElevenLabs</button>
+    <div class="acct" id="acctWrap">
+      <button class="pill" id="pillCloud" hidden aria-haspopup="menu" aria-expanded="false">Sign in</button>
+      <div class="acct-menu" id="acctMenu" role="menu" hidden>
+        <div class="acct-who" id="acctMenuWho"></div>
+        <button role="menuitem" id="btnMenuSettings">Settings</button>
+        <button role="menuitem" id="btnMenuInstall" hidden>Install the app</button>
+        <button role="menuitem" id="btnSignOutTop">Sign out</button>
+      </div>
     </div>
+    <button class="ghost small" id="btnSettings">Settings</button>
   </div>
-  <button class="ghost small" id="btnSettings">Settings</button>
 </header>
 
 <div class="banner" id="storageBanner" hidden>
@@ -132,10 +133,22 @@
           <div class="theme" id="theme"></div>
           <div class="timer" id="timer">15:00</div>
           <div class="sub" id="sub">Press Start when everyone is seated</div>
+          <div class="ring-cta">
+            <button class="primary" id="btnResume" hidden>Resume</button>
+            <button class="primary" id="btnStart">Start session</button>
+          </div>
         </div>
+      </div>
+      <div class="controls" id="liveControls">
+        <button id="btnPause" disabled>Pause</button>
+        <button id="btnNext" disabled>Next phase</button>
+        <button id="btnExtend" disabled>+1 min</button>
+        <button id="btnReplay" disabled title="Replay narration"><span class="long">Replay narration</span><span class="short">Replay</span></button>
+        <button class="danger" id="btnStop" disabled title="End session"><span class="long">End session</span><span class="short">End</span></button>
       </div>
       <div class="timeline" id="timeline"></div>
       <div class="seg-labels" id="segLabels"></div>
+      <div class="hint"><kbd>Space</kbd> pause · <kbd>N</kbd> next phase · <kbd>→</kbd> next song · <kbd>+</kbd> add a minute · <kbd>R</kbd> replay narration</div>
     </section>
 
     <aside class="side">
@@ -181,17 +194,6 @@
       </div>
     </aside>
   </div>
-
-  <footer class="controls">
-    <button class="primary" id="btnResume" hidden>Resume</button>
-    <button class="primary" id="btnStart">Start session</button>
-    <button id="btnPause" disabled>Pause</button>
-    <button id="btnNext" disabled>Next phase</button>
-    <button id="btnExtend" disabled>+1 min</button>
-    <button id="btnReplay" disabled>Replay narration</button>
-    <button class="danger" id="btnStop" disabled>End session</button>
-  </footer>
-  <div class="hint"><kbd>Space</kbd> pause · <kbd>N</kbd> next phase · <kbd>→</kbd> next song · <kbd>+</kbd> add a minute · <kbd>R</kbd> replay narration</div>
 </section>
 
 <!-- ============================================================ Settings -->
