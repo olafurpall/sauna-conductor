@@ -2,11 +2,11 @@
 // narration, run history, play counts and your Spotify login.
 // A session can be shared by invite (collaborator or viewer) or by a link (viewer).
 // The browser's own storage stays the working copy, so everything keeps working offline.
-import { SUPABASE_URL, SUPABASE_KEY } from './config.js?v=3.0.1-b12beced';
-import { app } from './app.js?v=3.0.1-b12beced';
-import { store, log, toast, sleep } from './util.js?v=3.0.1-b12beced';
-import * as db from './db.js?v=3.0.1-b12beced';
-import { countsAsPlay } from './sessions.js?v=3.0.1-b12beced';
+import { SUPABASE_URL, SUPABASE_KEY } from './config.js?v=3.1-c91bd7fc';
+import { app } from './app.js?v=3.1-c91bd7fc';
+import { store, log, toast, sleep } from './util.js?v=3.1-c91bd7fc';
+import * as db from './db.js?v=3.1-c91bd7fc';
+import { countsAsPlay } from './sessions.js?v=3.1-c91bd7fc';
 
 const Q = { quiet: true };            // local writes made by sync must not trigger another upload
 const BUCKET = 'clips';

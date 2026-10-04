@@ -1,9 +1,9 @@
 // The account button and menu in the header (Settings, Install, Sign out), Settings → Account,
 // and for the admin: Spotify access requests.
-import { $, h, toast } from './util.js?v=3.0.1-b12beced';
-import { app } from './app.js?v=3.0.1-b12beced';
-import { cloud, signOut, syncAll, setRequestStatus, refreshPeople } from './cloud.js?v=3.0.1-b12beced';
-import { installButton, isInstalled } from './pwa.js?v=3.0.1-b12beced';
+import { $, h, toast } from './util.js?v=3.1-c91bd7fc';
+import { app } from './app.js?v=3.1-c91bd7fc';
+import { cloud, signOut, syncAll, setRequestStatus, refreshPeople } from './cloud.js?v=3.1-c91bd7fc';
+import { installButton, isInstalled } from './pwa.js?v=3.1-c91bd7fc';
 
 let isRunning = () => false;
 
@@ -40,6 +40,7 @@ function toggleMenu() {
   const inst = document.querySelector('.install-btn:not([hidden])');
   $('#btnMenuInstall').hidden = isInstalled() || !inst;
   if (inst) $('#btnMenuInstall').textContent = inst.textContent.trim();   // "Add to Home Screen" on iPhone
+  $('#btnMenuCallouts').hidden = !cloud.admin;
 }
 
 export function paintAccount() {
@@ -92,6 +93,7 @@ export function initAccount(opts) {
   document.addEventListener('click', (e) => { if (!e.target.closest('#acctWrap')) closeMenu(); });
   document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeMenu(); });
   $('#btnMenuSettings').addEventListener('click', () => { closeMenu(); app.openSettings('set-account'); });
+  $('#btnMenuCallouts').addEventListener('click', () => { closeMenu(); if (isRunning()) { toast('End the session first.'); return; } app.show('callouts'); });
   $('#btnMenuInstall').addEventListener('click', () => { closeMenu(); const b = document.querySelector('.install-btn:not([hidden])'); if (b) b.click(); });
   const out = async () => {
     closeMenu();

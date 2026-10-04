@@ -10,6 +10,7 @@ import { editorView } from './editor.js';
 import { liveView } from './live.js';
 import { sessionView } from './overview.js';
 import { timelineView } from './timeline.js';
+import { calloutsView } from './calloutadmin.js';
 import { preview } from './preview.js';
 import { cloud, initCloud, cloudSummary, callFunction } from './cloud.js';
 import { initAccount, paintAccount } from './account.js';
@@ -24,6 +25,7 @@ app.register('editor', editorView);
 app.register('live', liveView);
 app.register('session', sessionView);
 app.register('timeline', timelineView);
+app.register('callouts', calloutsView);
 preview.isRunning = () => liveView.running;
 
 // ---------------------------------------------------------------- header

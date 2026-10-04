@@ -8,6 +8,7 @@ import { app } from './app.js';
 import * as db from './db.js';
 import * as S from './sessions.js';
 import { eleven, clipKey, prepText, isV3 } from './eleven.js';
+import { chooseRecording } from './recorder.js';
 import { preview } from './preview.js';
 import { player } from './spotify.js';
 
@@ -350,16 +351,34 @@ function inspector() {
   const count = h('span', { class: 'muted small' });
   const paintState = () => {
     const stt = recording === ins.id ? 'recording' : S.clipState(s, cue, recs[cue]);
-    const [c, l] = { recording: ['chip info', 'Recording…'], ready: ['chip ok', `Recorded · ${fmtSong(clipMs(cue))}`], uploaded: ['chip info', 'Your own MP3'], outdated: ['chip warn', 'Changed — record again'], missing: ['chip', 'Not recorded'] }[stt];
+    const [c, l] = { recording: ['chip info', 'Recording…'], ready: ['chip ok', `Recorded · ${fmtSong(clipMs(cue))}`], uploaded: ['chip info', 'Your own recording'], callout: ['chip info', 'Callouts only'], outdated: ['chip warn', 'Changed — record again'], missing: ['chip', 'Not recorded'] }[stt];
     chip.className = c; chip.textContent = l;
     count.textContent = `${prepText(ins.text, s.voice.modelId).length} characters`;
   };
   paintState();
-  ta.addEventListener('input', () => { ins.text = ta.value; paintState(); changed(); const blk = $('.tl-ins.sel span', el); if (blk) blk.textContent = ins.text || 'New message'; });
+  ta.addEventListener('input', () => {
+    ins.text = ta.value; paintState(); changed();
+    const blk = $('.tl-ins.sel span', el); if (blk) blk.textContent = ins.text || 'New message';
+    const only = S.clipState(s, cue, recs[cue]) === 'callout';      // only callouts: nothing to record
+    rec.disabled = !!recording || only; own.disabled = !!recording || only;
+  });
 
   const rec = h('button', { class: 'small primary' }, st === 'missing' ? 'Record' : 'Record again');
-  rec.disabled = !!recording;
+  rec.disabled = !!recording || st === 'callout';
   rec.addEventListener('click', () => recordInsert(ins));
+  const own = h('button', { class: 'small ghost', title: 'Upload an audio file or record the message yourself' }, 'Use my recording');
+  own.disabled = !!recording || st === 'callout';
+  own.addEventListener('click', async () => {
+    const r = await chooseRecording({ title: 'Use my recording', text: ins.text });
+    if (!r) return;
+    await flush();
+    const x = { blob: r.blob, key: 'upload', chars: 0, at: Date.now(), source: 'uploaded' };
+    await db.clips.put(s.id, cue, x);
+    recs[cue] = x;
+    durCache.clear();
+    toast(r.from === 'mic' ? 'Your recording will play for this message.' : 'Your audio file will play for this message.');
+    render();
+  });
   const hear = h('button', { class: 'small' }, '▶ Hear it in place');
   hear.disabled = !recs[cue] || !at;
   hear.addEventListener('click', () => hearInPlace(ins));
@@ -389,7 +408,7 @@ function inspector() {
     h('div', { class: 'row' }, h('b', {}, 'Message inside a song'), chip, count, h('span', { class: 'spacer' }), del),
     h('div', { class: 'muted small tl-where' }, where, overlaps ? h('span', { class: 'chip warn', style: { marginLeft: '8px' } }, 'Overlaps a phase message, so it waits until that one ends') : null),
     ta,
-    h('div', { class: 'row' }, rec, hear, h('span', { class: 'spacer' }), h('span', { class: 'muted small' }, 'Move'), nb('−5 s', -5000), nb('−1 s', -1000), nb('+1 s', 1000), nb('+5 s', 5000)),
+    h('div', { class: 'row' }, rec, own, hear, h('span', { class: 'spacer' }), h('span', { class: 'muted small' }, 'Move'), nb('−5 s', -5000), nb('−1 s', -1000), nb('+1 s', 1000), nb('+5 s', 5000)),
     h('div', { class: 'grid2 mt' },
       slider('Music during the message', 'duck', s.levels.duck, (x) => `${x}% of normal`, 'Lower means the music dips more while the narrator speaks.'),
       slider('Narrator volume', 'narr', s.levels.narr ?? 100, (x) => `${x}%`, 'How loud this message is.')),

@@ -7,6 +7,7 @@ Runs a whole sauna session: Spotify playlists, a recorded narrator between round
 - **Live view**: round timer, music that dips under the narrator, song controls (previous / pause / next), and an *Up next* list you can click to jump.
 - **Session page and timeline**: every session at a glance with play counts; preview any song; place extra messages anywhere, even in the middle of a song.
 - **Private by default, easy to share**: everyone has their own sessions. Invite people as collaborators or viewers, or post a link.
+- **Your own voice, and callouts**: upload or record any message yourself, and add short callouts ("Let's do this!", "Last song!") recorded by a guest voice.
 - **An app on your phone**: install it from the browser for a home-screen icon.
 - **Playlists with Claude**: export your Spotify library, send it to Claude, import the playlists Claude builds.
 
@@ -80,7 +81,7 @@ Everything about one session in order: each round and cool-down with its message
    - **Eleven v3** is the most expressive and understands delivery cues like `[softly]`, `[warmly]`, `[chuckles]`, `[sighs]`. Three dots `...` add a pause.
    - **Change voice** opens the ElevenLabs voice library. Search (e.g. "deep narrator", "southern storyteller"), press ▶ to hear a sample, and **Use** to pick one.
    - **Hear the welcome in this voice** records the welcome message so you can judge the voice with your own words.
-5. **Narration**: every message is in its own text box. Edit freely. Each has ▶ Play, Record, and *Use my MP3* (or drag an MP3 onto it).
+5. **Narration**: every message is in its own text box. Edit freely. Each has ▶ Play, Record, and **Use my recording**: upload an audio file (MP3, M4A or WAV; you can also drag one onto the message) or **record it now** with the microphone. The recorder shows the text to read, counts down 3-2-1, and lets you listen back before you use it; quiet bits at the start and end are trimmed and the level evened out. The callouts box above the messages adds callouts (see *Callouts* below).
 6. **Levels**: music volume for heat and cool-down, how far the music dips under the narrator, narrator volume.
 7. **Create session**: records every message that isn't recorded yet (or has changed), then saves. A progress panel shows each message, which ones are recording, and roughly how long is left. Eleven v3 takes around 5–20 seconds per message. If ElevenLabs doesn't answer within 90 seconds the message is tried once more, and **Stop** cancels (messages already recorded are kept).
 
@@ -172,6 +173,16 @@ Under **Narration**, describe your group and the mood in your own words, for exa
 
 Tick **Short check-ins at the start of each song** to add a message at the start of every song (after the first in each round) saying how many minutes are left in the round. Press **Write narration**: Claude writes every message in the session's language in about a minute. Nothing is recorded yet. Read it through, change anything, then press **Create session** to record. Check-ins appear under *Messages inside songs* and on the timeline, where you can move them.
 
+## Callouts
+
+Callouts are short clips a person recorded for Sauna Conductor, for example Bubbi or Bríet saying *“Gerum þetta!”*, *“Síðasta lagið!”* or *“Þetta var geggjað!”*. They play next to the ElevenLabs narration.
+
+- **In a session**: under **Narration**, choose a **Callout voice**. Click in a message, then on a callout (+ Let's do this, + Last song…) to put its token there, e.g. `{callout-lets-start}`. At the start of a message the callout plays just before the narrator; anywhere else, right after. A message can be only callouts (no recording needed), which works well inside songs on the timeline. ▶ next to each callout plays it.
+- **Add them automatically** plays them at good moments: *Let's do this* after a round's message, *It's getting hot in here* mid-round, *Hang in, we're almost there* late in a long round, *1 minute left*, *Last song* when a round's last song starts, *Round done* before the cool-down message, and *That's a wrap* / *That was amazing* around the last message. Never two within 40 seconds of each other, and never over the narrator.
+- The editor warns if a message uses a callout the chosen voice doesn't have. Callouts are kept in the browser after the first run, so they also play offline.
+
+**Setting up callout profiles (admin)**: account menu → **Callouts**. **New profile**, then name, language and a short description. Each of the eight standard callouts (Let's do this, It's getting hot in here, Hang in we're almost there, 1 minute left, Last song, Round done, That's a wrap, That was amazing) gets one or more takes: **Record or upload** opens the same recorder, showing a suggested line (in Icelandic for Icelandic profiles); a take is picked at random each time. *Another callout* adds one of your own (e.g. `breathe-out`). Tick that the person **agreed** to their recordings being used, and note how, before **Published** can be ticked: only then can everyone choose the profile. Drafts are visible only to the admin, and only the admin can change profiles.
+
 ## Sync, sharing and backups
 
 - Signed in, every change is uploaded within seconds and other computers pick it up when they open the page, come back to it, or every two minutes. **Settings → Account → Sync now** does it immediately.
@@ -209,7 +220,8 @@ Tick **Short check-ins at the start of each song** to add a message at the start
   - `eleven`: all ElevenLabs calls, with the key from `app_secrets` (or the `ELEVENLABS_API_KEY` secret). Each person can record **25,000 characters a day** (`TTS_DAILY_CHARS`) and add 10 library voices a day (`VOICE_ADDS_DAILY`); the admin has no limit. Voices you made or cloned in your own ElevenLabs account are only for you; others can use library and stock voices.
   - `write`: the AI writer (Claude), with the **`ANTHROPIC_API_KEY`** secret (Supabase → Edge Functions → Secrets). 20 writes per person per day (`AI_DAILY_CALLS`); model `claude-opus-5-5` (`WRITER_MODEL`).
   - Usage per person and day is in the `usage_daily` table.
-- **Admin**: the first person who set up the app (Ólafur, in `app_admins`). The admin sees ElevenLabs credits in the header, and **Spotify access requests** (header: *1 waiting for Spotify*; Settings → *Spotify access*).
+- **Admin**: the first person who set up the app (Ólafur, in `app_admins`). The admin sees ElevenLabs credits in the header, **Spotify access requests** (header: *1 waiting for Spotify*; Settings → *Spotify access*) and the **Callouts** page (account menu).
+- **Callouts** (version 3.1): tables `callout_profiles` and `callout_clips`, audio in the private `callouts` storage bucket (`<profile id>/<clip id>.wav`). Everyone signed in can read published profiles; only the admin can write. Added to `supabase/schema.sql`; run it again to add them.
 - **Letting someone into Spotify**: <https://developer.spotify.com/dashboard> → *Thora sauna conductor* → **User Management** → add their name and the **Spotify email** from the request (5 people at most), then press **Mark as added** in Settings. They see it and press Try again. If someone is turned away anyway, the email on the list doesn't match their Spotify login. Opening the app to everyone needs Spotify's *extended quota*, which Spotify now gives only to registered businesses with 250,000 monthly users.
 - **Google sign-in**: Google Cloud project *Sauna Conductor* (account olafurpall@gmail.com, separate from TARS) → Google Auth Platform: app *Sauna Conductor*, External, **In production**, web client *Web client 1* with redirect URI `https://cldzrjlznhyswfzylxsl.supabase.co/auth/v1/callback`. Its Client ID and secret are in Supabase → Authentication → Sign In / Providers → Google.
 - **Email sign-in**: Supabase's built-in email only reaches members of the Supabase organization, a few per hour, so others are told to use Google. To open email sign-in to everyone, add an email sender under Supabase → Authentication → Emails → SMTP (e.g. Resend).

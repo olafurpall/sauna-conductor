@@ -5,6 +5,7 @@ import { app } from './app.js';
 import * as db from './db.js';
 import * as S from './sessions.js';
 import { langOf } from './script.js';
+import { profileById } from './callouts.js';
 import { preview, previewButton } from './preview.js';
 import { cloud, sharedWithMe, roleOf, sharedOut } from './cloud.js';
 import { openInviteDialog } from './invite.js';
@@ -124,7 +125,8 @@ function render() {
     h('span', { class: 'chip' }, songs ? fmtDur(S.totalMs(s)) : `${t.rounds} × ${t.roundMin} min`),
     h('span', { class: 'chip' }, `${t.rounds} round${t.rounds === 1 ? '' : 's'} · ${t.breakMin} min cool-downs`),
     h('span', { class: 'chip' }, 'Voice: ' + s.voice.name.replace(/ - .*/, '')),
-    s.lang && s.lang !== 'en' ? h('span', { class: 'chip' }, langOf(s.lang).native) : null);
+    s.lang && s.lang !== 'en' ? h('span', { class: 'chip' }, langOf(s.lang).native) : null,
+    s.callouts && s.callouts.profile ? h('span', { class: 'chip' }, '📣 ' + ((profileById(s.callouts.profile) || {}).name || 'Callouts') + (s.callouts.auto ? ' · automatic' : '')) : null);
 
   el.append(
     h('div', { class: 'ov-top' }, h('button', { class: 'ghost small', onclick: () => app.show('library') }, '← Sessions'), actions),
@@ -140,7 +142,7 @@ function flow() {
   const insFor = (uri) => (s.inserts || []).filter((x) => x.uri === uri).sort((a, b) => a.atMs - b.atMs);
   const cueRow = (id, title) => {
     const st = S.clipState(s, id, recs[id]);
-    const chip = st === 'ready' || st === 'uploaded' ? null : h('span', { class: 'chip warn' }, st === 'missing' ? 'Not recorded' : 'Changed — record again');
+    const chip = S.clipOkState(st) ? null : h('span', { class: 'chip warn' }, st === 'missing' ? 'Not recorded' : 'Changed — record again');
     const text = S.cueText(s, id).replace(/\s+/g, ' ').trim();
     return h('div', { class: 'ov-cue' }, clipButton(id),
       h('div', { class: 'm' }, h('div', { class: 't' }, title, ' ', chip), h('div', { class: 'x' }, text.length > 220 ? text.slice(0, 219) + '…' : text)));

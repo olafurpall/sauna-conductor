@@ -40,6 +40,7 @@ function toggleMenu() {
   const inst = document.querySelector('.install-btn:not([hidden])');
   $('#btnMenuInstall').hidden = isInstalled() || !inst;
   if (inst) $('#btnMenuInstall').textContent = inst.textContent.trim();   // "Add to Home Screen" on iPhone
+  $('#btnMenuCallouts').hidden = !cloud.admin;
 }
 
 export function paintAccount() {
@@ -92,6 +93,7 @@ export function initAccount(opts) {
   document.addEventListener('click', (e) => { if (!e.target.closest('#acctWrap')) closeMenu(); });
   document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeMenu(); });
   $('#btnMenuSettings').addEventListener('click', () => { closeMenu(); app.openSettings('set-account'); });
+  $('#btnMenuCallouts').addEventListener('click', () => { closeMenu(); if (isRunning()) { toast('End the session first.'); return; } app.show('callouts'); });
   $('#btnMenuInstall').addEventListener('click', () => { closeMenu(); const b = document.querySelector('.install-btn:not([hidden])'); if (b) b.click(); });
   const out = async () => {
     closeMenu();

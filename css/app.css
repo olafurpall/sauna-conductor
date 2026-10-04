@@ -671,3 +671,78 @@ dialog.ios-install ol { padding-left: 20px; line-height: 1.6; }
 }
 header.top { z-index: 20; }          /* the account menu opens over the page */
 .set-sec a, .help a { color: var(--heat); text-underline-offset: 2px; }
+
+/* ---- "Use my recording": upload a file or record with the microphone */
+dialog.rec-dlg { width: min(520px, calc(100vw - 32px)); }
+.rec-body { display: grid; gap: 14px; padding-top: 18px; }
+.rec-choices { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.rec-choice { display: flex; align-items: center; gap: 12px; text-align: left; padding: 14px; border-radius: 14px; min-height: 76px; }
+.rec-choice b { display: block; font-size: 15px; }
+.rec-choice small { display: block; color: var(--muted); font-size: 12px; margin-top: 3px; line-height: 1.35; }
+.rec-ic { flex: none; display: grid; place-items: center; width: 38px; height: 38px; border-radius: 50%; background: var(--panel2); font-size: 16px; }
+.rec-ic.mic { color: var(--danger); }
+.rec-script { border-left: 2px solid var(--heat); padding: 2px 0 2px 14px; }
+.rec-script p { margin: 6px 0 0; font-size: 16px; line-height: 1.55; white-space: pre-wrap; }
+.rec-meter { height: 8px; border-radius: 4px; background: rgba(255,255,255,.08); overflow: hidden; }
+.rec-meter i { display: block; height: 100%; width: 0; background: linear-gradient(90deg, var(--ok), var(--heat)); transition: width .08s linear; }
+.rec-count { font-family: var(--mono); font-size: 64px; font-weight: 200; text-align: center; line-height: 1; padding: 8px 0; }
+.rec-clock { display: flex; align-items: center; justify-content: center; gap: 10px; font-family: var(--mono); font-size: 28px; }
+.rec-dot { width: 12px; height: 12px; border-radius: 50%; background: var(--danger); animation: pulse 1s ease-in-out infinite; }
+.rec-row { align-items: center; }
+.rec-go { min-width: 180px; }
+.rec-audio { width: 100%; }
+.rec-msg:empty { display: none; }
+@media (max-width: 520px) { .rec-choices { grid-template-columns: 1fr; } }
+
+/* ---- Callouts page (admin) */
+#view-callouts { max-width: 1100px; margin: 0 auto; }
+.co-head { display: flex; align-items: center; gap: 14px; margin: 6px 0 4px; }
+.co-head h2 { font-size: 22px; letter-spacing: .1em; text-transform: uppercase; }
+.co-intro { max-width: 760px; }
+.co-grid { display: grid; grid-template-columns: 260px minmax(0, 1fr); gap: 22px; align-items: start; margin-top: 14px; }
+.co-list { display: grid; gap: 8px; }
+.co-item { display: grid; gap: 6px; text-align: left; padding: 12px 14px; border-radius: 12px; }
+.co-item.on { border-color: var(--heat); background: rgba(255,138,61,.08); }
+.co-item b { font-size: 15px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.co-meta { color: var(--muted); font-size: 12px; }
+.co-meta .chip { font-size: 11px; padding: 1px 7px; }
+.co-detail.co-blank { padding: 40px 20px; text-align: center; }
+.co-detail { border: 1px solid var(--line); border-radius: 16px; padding: 18px; background: var(--panel); display: grid; gap: 14px; min-width: 0; }
+.co-fields { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 220px); gap: 10px 14px; }
+.co-fields .wide { grid-column: 1 / -1; }
+.co-fields label.f { display: grid; gap: 6px; font-size: 13px; color: var(--muted); }
+.co-fields select { width: 100%; min-width: 0; }
+.co-consent { display: grid; gap: 10px; padding: 12px 14px; border-radius: 12px; border: 1px solid var(--line); background: rgba(255,255,255,.02); }
+.co-sub { font-size: 14px; letter-spacing: .12em; text-transform: uppercase; margin-top: 6px; }
+.co-keys { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 10px; }
+.co-key { border: 1px solid var(--line); border-radius: 12px; padding: 12px; display: grid; gap: 8px; align-content: start; }
+.co-key.none { border-style: dashed; }
+.co-key-top { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.co-key code, .co-tok code { font-family: var(--mono); font-size: 11px; color: var(--heat); background: rgba(255,138,61,.08); padding: 2px 6px; border-radius: 5px; }
+.co-take { display: grid; grid-template-columns: auto minmax(0, 1fr) auto auto; gap: 8px; align-items: center; }
+.co-take input { padding: 6px 9px; font-size: 13px; }
+.co-addkey { display: flex; align-items: center; gap: 8px; grid-column: 1 / -1; flex-wrap: wrap; }
+.co-addkey input { flex: 1 1 180px; width: auto; min-width: 0; }
+@media (max-width: 760px) {
+  .co-grid { grid-template-columns: 1fr; }
+  .co-list { grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); }
+  .co-fields { grid-template-columns: 1fr; }
+  .co-keys { grid-template-columns: 1fr; }
+}
+
+/* ---- editor: callouts */
+.co-box { border: 1px solid rgba(121,195,255,.28); background: linear-gradient(180deg, rgba(121,195,255,.06), rgba(121,195,255,.015)); border-radius: 14px; padding: 14px 16px; margin: 0 0 18px; display: grid; gap: 10px; }
+.co-box-head { display: flex; align-items: baseline; gap: 6px; flex-wrap: wrap; }
+.co-box-head b { color: var(--cool); font-weight: 600; }
+.co-row { align-items: flex-end; gap: 16px; flex-wrap: wrap; }
+.co-row label.f { flex: 0 1 280px; }
+.co-row label.chk { flex: 1 1 280px; }
+.co-select { width: 100%; min-width: 0; }
+.co-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.co-tok { display: inline-flex; border: 1px solid var(--line); border-radius: 999px; overflow: hidden; }
+.co-tok button { border: 0; border-radius: 0; padding: 6px 11px; font-size: 13px; }
+.co-tok .co-play { border-left: 1px solid var(--line); padding: 6px 10px; }
+.warnline { color: var(--heat); margin: 0; }
+.co-warn:empty { display: none; }
+.co-head button { white-space: nowrap; }
+@media (max-width: 520px) { .co-head { gap: 10px; } .co-head h2 { font-size: 17px; } }

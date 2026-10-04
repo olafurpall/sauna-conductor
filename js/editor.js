@@ -1,11 +1,14 @@
 // Session creator / editor: playlists, timing, voice, editable narration, recording.
-import { $, $$, h, toast, fmtDur, fmtSong, autosize, pickFile, sleep, now, store } from './util.js';
+import { $, $$, h, toast, fmtDur, fmtSong, autosize, sleep, now, store } from './util.js';
 import { planRounds, planBreaks } from './planner.js';
 import { app, cfg } from './app.js';
 import * as db from './db.js';
 import * as S from './sessions.js';
 import { cuePlan, defaultText, LANGS, langOf, hasBuiltInText } from './script.js';
 import { eleven, isV3, clipKey, prepText } from './eleven.js';
+import { chooseRecording, checkUpload } from './recorder.js';
+import { tokenFor, tokensIn, hasTokens } from './tokens.js';
+import { callouts, loadProfiles, profileById, keysOf, labelOf, catalogOf, playKey } from './callouts.js';
 import { cloud, roleOf } from './cloud.js';
 import { writeNarration, applyNarration, checkinSlots } from './writer.js';
 import { auth, myPlaylists, parseUri, playlistInfo, sourceTracks, searchTracks } from './spotify.js';
@@ -917,12 +920,102 @@ function secScript() {
   insertBox = h('div', { class: 'ins-box' });
   const sec = h('section', { class: 'ed-sec', id: 'ed-script' },
     h('h2', {}, 'Narration'),
-    h('p', { class: 'help' }, 'Edit any message. Each one is recorded as its own clip and plays at the moment shown. You can also drop in your own MP3.'),
-    aiBox(), scriptBox, insertBox);
+    h('p', { class: 'help' }, 'Edit any message. Each one is recorded as its own clip and plays at the moment shown. With Use my recording you can upload an audio file or record a message yourself.'),
+    aiBox(), calloutBox(), scriptBox, insertBox);
   refreshScript();
   refreshInserts = paintInserts;
   paintInserts();
   return sec;
+}
+
+// ---------------------------------------------------------------- callouts
+// A session can pick a callout profile (clips a person recorded) and put its callouts in messages
+// as tokens like {callout-lets-start}, or let them play automatically during the session.
+let lastTa = null;            // the message last edited: callout tokens go in at its cursor
+let coWarn = () => {};
+let coPaint = null;
+app.on('callouts', () => { if (coPaint && app.current === 'editor') coPaint(); });
+
+function insertToken(key) {
+  const t = lastTa && lastTa.isConnected ? lastTa : null;
+  const tok = tokenFor(key);
+  if (!t) {
+    if (navigator.clipboard) navigator.clipboard.writeText(tok).catch(() => {});
+    toast(`Click into a message first, then press the callout again (or paste ${tok}).`, 4500);
+    return;
+  }
+  const a = t.selectionStart ?? t.value.length, b = t.selectionEnd ?? a;
+  const before = t.value.slice(0, a), after = t.value.slice(b);
+  const pre = before && !/\s$/.test(before) ? ' ' : '';
+  const post = after && !/^\s/.test(after) ? ' ' : '';
+  t.value = before + pre + tok + post + after;
+  const pos = (before + pre + tok).length;
+  t.focus(); t.setSelectionRange(pos, pos);
+  t.dispatchEvent(new Event('input'));
+}
+
+function calloutBox() {
+  if (!cloud.configured) { coPaint = null; return h('div', { hidden: true }); }
+  const box = h('div', { class: 'co-box' });
+  const warn = h('div', { class: 'co-warn' });
+  coWarn = () => {
+    warn.innerHTML = '';
+    const co = s.callouts || {};
+    const p = profileById(co.profile);
+    const used = new Set();
+    for (const c of S.allCues(s)) { const t = tokensIn(S.cueText(s, c.id)); [...t.before, ...t.after].forEach((k) => used.add(k)); }
+    if (!used.size) return;
+    if (!p) { warn.append(h('p', { class: 'small warnline' }, 'Some messages have callouts, but no callout voice is chosen above, so they are skipped.')); return; }
+    const have = new Set(keysOf(p));
+    const miss = [...used].filter((k) => !have.has(k));
+    if (miss.length) warn.append(h('p', { class: 'small warnline' }, `${p.name} has no ${miss.map((k) => '“' + labelOf(k) + '”').join(', ')} callout, so ${miss.length > 1 ? 'those are' : 'that one is'} skipped.`));
+  };
+  coPaint = () => {
+    box.innerHTML = '';
+    const co = s.callouts || {};
+    const list = callouts.profiles.filter((p) => (p.clips || []).length && (p.published || cloud.admin));
+    const cur = profileById(co.profile);
+    if (!list.length && !co.profile) {
+      if (!cloud.admin) { box.hidden = true; return; }
+      box.hidden = false;
+      box.append(h('div', { class: 'co-box-head' }, h('b', {}, '📣 Callouts'),
+        h('span', { class: 'muted small' }, ' Short clips a person recorded, like “Let’s do this!”, played next to the narration. No callout profiles are ready yet.'),
+        h('span', { class: 'spacer' }), h('button', { class: 'small', onclick: () => app.show('callouts') }, 'Set up callouts')));
+      return;
+    }
+    box.hidden = false;
+    const sel = h('select', { 'aria-label': 'Callout voice', class: 'co-select' },
+      h('option', { value: '' }, 'No callouts'),
+      ...list.map((p) => h('option', { value: p.id }, p.name + (p.published ? '' : ' (draft, only you)'))),
+      co.profile && !list.some((p) => p.id === co.profile) ? h('option', { value: co.profile }, (cur ? cur.name : 'A removed profile') + ' (no longer available)') : null);
+    sel.value = co.profile || '';
+    sel.addEventListener('change', () => { s.callouts = { ...(s.callouts || {}), profile: sel.value || '' }; touch(); coPaint(); });
+    const auto = h('input', { type: 'checkbox', checked: !!co.auto, disabled: !cur });
+    auto.addEventListener('change', () => { s.callouts = { ...(s.callouts || {}), auto: auto.checked }; touch(); });
+    const head = h('div', { class: 'co-box-head' }, h('b', {}, '📣 Callouts'),
+      h('span', { class: 'muted small' }, ' Short clips a person recorded, played next to the narration.'),
+      cloud.admin ? h('span', { class: 'spacer' }) : null, cloud.admin ? h('button', { class: 'small ghost', onclick: () => app.show('callouts') }, 'Manage') : null);
+    box.append(head, h('div', { class: 'row co-row' }, h('label', { class: 'f' }, h('span', {}, 'Callout voice'), sel),
+      h('label', { class: 'chk' }, auto, 'Add them automatically: when a round starts and ends, mid-round, at 1 minute left, the last song and the end')));
+    if (cur) {
+      const chips = keysOf(cur).map((k) => {
+        const c = catalogOf(k);
+        const ins = h('button', { class: 'small co-chip', title: `Put ${tokenFor(k)} into the message you're editing` }, '+ ' + labelOf(k));
+        ins.addEventListener('mousedown', (e) => e.preventDefault());    // keep the cursor in the message
+        ins.addEventListener('click', () => insertToken(k));
+        const play = h('button', { class: 'small ghost co-play', title: `Hear ${cur.name}: ${labelOf(k)}` }, '▶');
+        play.addEventListener('click', () => playKey(cur, k).catch((e) => toast(e.message || String(e))));
+        return h('span', { class: 'co-tok', title: c ? c.when : '' }, ins, play);
+      });
+      box.append(h('div', { class: 'co-chips' }, ...chips),
+        h('p', { class: 'muted small' }, 'Click in a message, then on a callout to put it there. At the start of a message it plays just before the narrator; anywhere else, right after. A message can also be only callouts.'));
+    }
+    box.append(warn);
+    coWarn();
+  };
+  coPaint();
+  loadProfiles().then(() => { if (coPaint) coPaint(); });
+  return box;
 }
 
 // ---------------------------------------------------------------- write the narration with AI
@@ -1009,7 +1102,8 @@ function refreshScript() {
 
 const STATE_LABEL = {
   ready: ['chip ok', 'Recorded'],
-  uploaded: ['chip info', 'Your own MP3'],
+  uploaded: ['chip info', 'Your own recording'],
+  callout: ['chip info', 'Callouts only'],
   outdated: ['chip warn', 'Changed — record again'],
   missing: ['chip', 'Not recorded'],
 };
@@ -1021,7 +1115,7 @@ function cueEditor(c) {
   const count = h('span', { class: 'n' });
   const play = h('button', { class: 'small' }, '▶ Play');
   const rec = h('button', { class: 'small' }, 'Record');
-  const up = h('button', { class: 'small ghost' }, 'Use my MP3');
+  const up = h('button', { class: 'small ghost', title: 'Upload an audio file or record the message yourself' }, 'Use my recording');
   const reset = h('button', { class: 'small ghost' }, ins ? 'Remove' : 'Reset text');
   const box = h('div', { class: 'cue-ed' + (ins ? ' ins' : ''), 'data-cue': c.id },
     h('div', { class: 'cue-top' }, h('b', {}, c.title), h('span', { class: 'w' }, c.when), chip, count),
@@ -1032,17 +1126,22 @@ function cueEditor(c) {
     const [cls, lab] = busyCues.has(c.id) ? ['chip info', 'Recording…'] : STATE_LABEL[st];
     chip.className = cls; chip.textContent = lab;
     count.textContent = `${prepText(S.cueText(s, c.id), s.voice.modelId).length} characters`;
-    play.disabled = !recs[c.id] || busyCues.has(c.id);
-    rec.disabled = busy;
+    play.disabled = !recs[c.id] || busyCues.has(c.id) || st === 'callout';
+    rec.disabled = busy || st === 'callout';
+    up.disabled = st === 'callout';
     rec.textContent = st === 'missing' ? 'Record' : 'Record again';
   };
   cueEls[c.id] = { paint };
   paint();
 
-  ta.addEventListener('input', () => { if (ins) ins.text = ta.value; else s.script[c.id] = ta.value; autosize(ta); touch(); paint(); });
+  ta.addEventListener('input', () => { if (ins) ins.text = ta.value; else s.script[c.id] = ta.value; autosize(ta); touch(); paint(); if (hasTokens(ta.value) || ta.dataset.tok) { ta.dataset.tok = hasTokens(ta.value) ? '1' : ''; coWarn(); } });
+  ta.addEventListener('focus', () => { lastTa = ta; });
   play.addEventListener('click', () => { if (recs[c.id]) playAudio(recs[c.id].blob, play, true); });
   rec.addEventListener('click', () => recordAndPlay(c.id, null));
-  up.addEventListener('click', async () => { const [f] = await pickFile('audio/*'); if (f) useUpload(c.id, f); });
+  up.addEventListener('click', async () => {
+    const r = await chooseRecording({ title: 'Use my recording: ' + c.title, text: S.cueText(s, c.id) });
+    if (r) useUpload(c.id, r.blob, r.from);
+  });
   reset.addEventListener('click', () => {
     if (ins) {
       if (!confirm('Remove this message?')) return;
@@ -1062,14 +1161,14 @@ function cueEditor(c) {
 
 function refreshCueStates() { Object.values(cueEls).forEach((x) => x.paint()); updateBar(); }
 
-async function useUpload(cueId, file) {
-  if (!/^audio\//.test(file.type) && !/\.(mp3|m4a|wav|ogg)$/i.test(file.name)) { toast('That is not an audio file.'); return; }
+async function useUpload(cueId, file, from = 'file') {
+  if (from === 'file') { const err = checkUpload(file); if (err) { toast(err); return; } }
   await persist();
   const rec = { blob: file, key: 'upload', chars: 0, at: Date.now(), source: 'uploaded' };
   await db.clips.put(s.id, cueId, rec);
   recs[cueId] = rec;
   refreshCueStates();
-  toast('Your MP3 will play for this message.');
+  toast(from === 'mic' ? 'Your recording will play for this message.' : 'Your audio file will play for this message.');
 }
 
 // ---------------------------------------------------------------- recording (with progress panel)
@@ -1260,6 +1359,7 @@ async function record(ids) {
 
 async function recordAndPlay(cueId, btn) {
   const st = S.clipState(s, cueId, recs[cueId]);
+  if (st === 'callout') { toast('This message is only callouts, so there is nothing to record.'); return; }
   if (btn && st === 'ready') { playAudio(recs[cueId].blob, btn, true); return; }
   if (btn) { btn.disabled = true; btn.dataset.label = btn.dataset.label || btn.textContent; btn.textContent = 'Recording…'; }
   const ok = await record([cueId]);

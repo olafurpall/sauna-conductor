@@ -1,8 +1,9 @@
 // Session model: everything needed to replay a sauna session exactly.
-import { uid, blobToBase64, base64ToBlob, fmtSong, store } from './util.js?v=3.0.1-b12beced';
-import { cuePlan, defaultScript, defaultText } from './script.js?v=3.0.1-b12beced';
-import { clipKey } from './eleven.js?v=3.0.1-b12beced';
-import * as db from './db.js?v=3.0.1-b12beced';
+import { uid, blobToBase64, base64ToBlob, fmtSong, store } from './util.js?v=3.1-c91bd7fc';
+import { cuePlan, defaultScript, defaultText } from './script.js?v=3.1-c91bd7fc';
+import { clipKey } from './eleven.js?v=3.1-c91bd7fc';
+import { calloutOnly } from './tokens.js?v=3.1-c91bd7fc';
+import * as db from './db.js?v=3.1-c91bd7fc';
 
 export const DEFAULT_VOICE = {
   id: 'xuiKYsOhCzCAyIdb1aX3', name: 'Clint Brooks',
@@ -165,8 +166,10 @@ export function ensureScript(s) {
   return s;
 }
 
-// 'missing' | 'ready' | 'outdated' | 'uploaded'
+// 'missing' | 'ready' | 'outdated' | 'uploaded' | 'callout' (only callouts: nothing to record)
+export const clipOkState = (st) => st === 'ready' || st === 'uploaded' || st === 'callout';
 export function clipState(s, cueId, rec) {
+  if (calloutOnly(cueText(s, cueId))) return 'callout';
   if (!rec || !rec.blob) return 'missing';
   if (rec.source === 'uploaded') return 'uploaded';
   return rec.key === clipKey(cueText(s, cueId), s.voice) ? 'ready' : 'outdated';
@@ -175,7 +178,7 @@ export function clipState(s, cueId, rec) {
 export async function readiness(s) {
   const recs = await db.clips.forSession(s.id);
   const list = allCues(s).map((c) => ({ ...c, state: clipState(s, c.id, recs[c.id]) }));
-  const ok = list.filter((c) => c.state === 'ready' || c.state === 'uploaded').length;
+  const ok = list.filter((c) => clipOkState(c.state)).length;
   return { list, ok, total: list.length, recs };
 }
 

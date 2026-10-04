@@ -6,6 +6,8 @@ import * as S from './sessions.js';
 import { cueForRound } from './script.js';
 import { player, auth } from './spotify.js';
 import { preview } from './preview.js';
+import { stripTokens, tokensIn, calloutOnly } from './tokens.js';
+import { callouts, prepare as prepareCalloutClips, pick as pickCallout, labelOf as calloutLabel } from './callouts.js';
 
 const el = $('#view-live');
 let sess = null;          // loaded session
@@ -43,12 +45,99 @@ async function load(id) {
   for (const c of r.list) {
     cueMeta[c.id] = c;
     const rec = r.recs[c.id];
-    if (rec && rec.blob) { clipUrls[c.id] = URL.createObjectURL(rec.blob); clipOk[c.id] = c.state === 'ready' || c.state === 'uploaded'; }
+    if (c.state === 'callout') clipOk[c.id] = true;            // only callouts: nothing recorded to play
+    else if (rec && rec.blob) { clipUrls[c.id] = URL.createObjectURL(rec.blob); clipOk[c.id] = S.clipOkState(c.state); }
   }
   sess = s;
   $('#tabLive').disabled = false;
   engine.plan = buildPlan();
   buildTimeline();
+  co.ready = prepareCallouts(s);
+}
+
+// ---------------------------------------------------------------- callouts
+// Clips a person recorded ("Let's do this!"), from the session's callout profile. Tokens in a message
+// play just before it (at its start) or right after it; with "automatically", the session also plays
+// them when a round starts and ends, mid-round, at one minute left, at the last song and at the end.
+const co = { prep: null, ready: null, lastAt: 0, busy: false, get auto() { return !!(this.prep && sess && sess.callouts && sess.callouts.auto); } };
+async function prepareCallouts(s) {
+  if (co.prep) Object.values(co.prep.urls).flat().forEach((x) => URL.revokeObjectURL(x.url));
+  co.prep = null;
+  const pid = s.callouts && s.callouts.profile;
+  if (!pid || !callouts.available) return;
+  let prep;
+  try { prep = await prepareCalloutClips(pid); } catch (e) { log('callouts-error', e.message || String(e)); return; }
+  if (sess !== s) return;
+  if (!prep.profile) { toast('The callouts for this session are no longer available.', 5000); return; }
+  co.prep = prep;
+  if (prep.missing) toast(`${prep.missing} callout${prep.missing > 1 ? 's' : ''} could not be loaded (offline?). The rest will play.`, 5000);
+  log('callouts-ready', prep.profile.name, Object.keys(prep.urls).length);
+}
+const hasCallout = (k) => !!(co.prep && co.prep.urls[k] && co.prep.urls[k].length);
+
+// Explicit tokens in a message, plus the automatic ones for the phase it belongs to.
+function calloutsFor(text, ph) {
+  const t = tokensIn(text);
+  if (co.auto && ph) {
+    if (ph.type === 'round') t.after.push('lets-start');
+    else if (ph.type === 'break') t.before.unshift('done');
+    else if (ph.type === 'closing') { t.before.unshift('final-done'); t.after.push('amazing'); }
+  }
+  const seen = new Set();
+  const once = (a) => a.filter((k) => !seen.has(k) && seen.add(k));
+  return { before: once(t.before), after: once(t.after) };
+}
+
+async function playCallout(key, tok) {
+  const take = pickCallout(co.prep, key);
+  if (!take) { log('callout-missing', key); return 'none'; }
+  await waitWhilePaused(tok);
+  if (tok !== engine.token) return 'stopped';
+  narr.active = 'co:' + key; renderNarr();
+  const r = await playUrl(take.url);
+  if (tok === engine.token && narr.active === 'co:' + key) { narr.active = null; renderNarr(); }
+  co.lastAt = now();
+  log('callout', key, r);
+  return r;
+}
+
+// Callouts during a round, over the music.
+function autoCallouts(p) {
+  if (!co.auto || co.busy || p.type !== 'round' || !p.musicOn || narr.active || insertBusy || narr.owner === 'replay') return;
+  const dur = p.durMs + engine.extraMs;
+  const el = elapsedMs(), rem = remainingMs();
+  if (!dur || rem == null) return;
+  const a = (p.auto = p.auto || {});
+  const due = [];
+  if (!a.last && p.tracks && p.tracks.length > 1 && setIndex(p) === p.tracks.length - 1 && el > 60000) {
+    a.last = true;
+    if (hasCallout('last-song') && player.position() < 20000) due.push('last-song');
+  }
+  if (!a.min && rem <= 62000) { a.min = true; if (rem > 35000 && dur >= 4 * 60000 && hasCallout('one-minute-left')) due.push('one-minute-left'); }
+  if (!a.hot && el >= dur * 0.45) { a.hot = true; if (dur >= 6 * 60000 && rem > 120000 && hasCallout('getting-hot')) due.push('getting-hot'); }
+  if (!a.almost && el >= dur * 0.75) { a.almost = true; if (dur >= 8 * 60000 && rem > 100000 && hasCallout('almost-there')) due.push('almost-there'); }
+  if (!due.length || (now() - co.lastAt) * speed() < 40000) return;      // never two close together
+  calloutOverMusic(p, due[0]);
+}
+// After a resume, moments already past don't play.
+function markPassed(p) {
+  if (p.type !== 'round') return;
+  const dur = p.durMs + engine.extraMs, el = elapsedMs(), rem = remainingMs();
+  const lastNow = !!(p.tracks && p.tracks.length > 1 && setIndex(p) === p.tracks.length - 1);
+  p.auto = { last: lastNow, min: rem != null && rem <= 62000, hot: el >= dur * 0.45, almost: el >= dur * 0.75 };
+}
+
+async function calloutOverMusic(p, key) {
+  const tok = engine.token;
+  co.busy = true;
+  const target = (p.type === 'round' ? sess.levels.heat : sess.levels.cool) / 100;
+  try {
+    const seq = narr.seq;
+    await music.fadeTo(target * sess.levels.duck / 100, 800, tok);
+    if (tok === engine.token && seq === narr.seq && narr.owner !== 'replay' && !narr.active) await playCallout(key, tok);
+    await waitWhilePaused(tok);
+    if (tok === engine.token && narr.owner !== 'replay' && !narr.active && !insertBusy) await music.fadeTo(target, 1500, tok);
+  } finally { co.busy = false; }
 }
 
 // ---------------------------------------------------------------- music level
@@ -224,16 +313,20 @@ app.on('playback', () => renderNowPlaying());
 app.on('queue', () => renderQueue());
 
 // ---------------------------------------------------------------- narration
-const narr = { audio: new Audio(), active: null, stop: null, paused: false, tts: false };
+// seq changes whenever the narration is stopped, so a message made of several parts (callouts and
+// the recording) knows not to carry on with its next part.
+const narr = { audio: new Audio(), active: null, stop: null, paused: false, tts: false, seq: 0 };
 narr.audio.preload = 'auto';
 
 function stopNarration() {
+  narr.seq++;
   if (narr.stop) narr.stop();
   narr.stop = null; narr.active = null; narr.paused = false;
   renderNarr();
 }
 
 function playUrl(url, volume) {
+  if (narr.stop) narr.stop();          // never leave an earlier clip's promise waiting
   return new Promise((resolve) => {
     const a = narr.audio;
     let settled = false;
@@ -260,11 +353,14 @@ function pickVoice() {
 if (window.speechSynthesis) speechSynthesis.onvoiceschanged = () => { cachedVoice = undefined; };
 
 function speak(text) {
+  if (narr.stop) narr.stop();
   return new Promise((resolve) => {
     if (!window.speechSynthesis) return resolve('none');
+    const clean = stripTokens(text).replace(/\[[^\]]*\]/g, '').replace(/\s+/g, ' ').trim();
+    if (!clean) return resolve('none');
     const synth = window.speechSynthesis;
     synth.cancel();
-    const parts = text.replace(/\[[^\]]*\]/g, '').replace(/\s+/g, ' ').match(/[^.!?…]+[.!?…]*\s*/g) || [text];
+    const parts = clean.match(/[^.!?…]+[.!?…]*\s*/g) || [clean];
     const voice = pickVoice();
     let i = 0, stopped = false, settled = false, guard = null;
     narr.tts = true;
@@ -290,14 +386,20 @@ function speak(text) {
 
 async function waitWhilePaused(tok) { while (engine.paused && tok === engine.token) await sleep(200); }
 
-async function narrate(id, tok) {
+async function narrate(id, tok, ph) {
   await waitWhilePaused(tok);
   if (tok !== engine.token) return 'stopped';
+  const text = S.cueText(sess, id);
+  const extra = calloutsFor(text, ph);
+  const seq = narr.seq;
+  const live = () => tok === engine.token && seq === narr.seq;
+  for (const k of extra.before) { await playCallout(k, tok); if (!live()) return 'stopped'; }
   narr.active = id; renderNarr();
   let result = 'none';
   if (clipUrls[id]) result = await playUrl(clipUrls[id]);
-  if ((result === 'none' || result === 'error') && cfg.fallbackVoice && tok === engine.token) result = await speak(S.cueText(sess, id));
-  if (tok === engine.token) { narr.active = null; renderNarr(); }
+  if ((result === 'none' || result === 'error') && cfg.fallbackVoice && live() && !calloutOnly(text)) result = await speak(text);
+  if (tok === engine.token && narr.active === id) { narr.active = null; renderNarr(); }
+  for (const k of extra.after) { if (!live()) break; await playCallout(k, tok); }
   log('narrated', id, result);
   return result;
 }
@@ -407,6 +509,7 @@ async function startSession() {
   unlockAudio();   // inside the click, before any waiting
   preview.stop();
   if (!(await readyToPlay())) return;
+  if (co.ready) await Promise.race([co.ready, sleep(4000)]);
   const missing = engine.plan.filter((p) => !clipOk[p.cue]).length + (sess.inserts || []).filter((x) => !clipOk[S.insertCue(x)]).length;
   if (missing && !confirm(`${missing} narration message${missing > 1 ? 's are' : ' is'} not recorded (or out of date). ${cfg.fallbackVoice ? 'They will be read by the browser voice.' : 'They will be skipped.'} Start anyway?`)) return;
   requestWakeLock();
@@ -483,13 +586,14 @@ async function enterPhase(i, resumeRun) {
       renderQueue();
     })();
     if (resumeRun) {
+      markPassed(p);
       await musicJob;
       if (tok !== engine.token) return;
       toast(`Resumed: ${phaseName(p)}.`, 3500);
       await music.fadeTo(target, 4000, tok);
       return;
     }
-    await Promise.all([musicJob, narrate(p.cue, tok)]);
+    await Promise.all([musicJob, narrate(p.cue, tok, p)]);
     await waitWhilePaused(tok);
     if (tok !== engine.token || narr.owner === 'replay') return;
     await music.fadeTo(target, isRound ? 3000 : 4000, tok);
@@ -538,7 +642,7 @@ async function replay() {
   const target = (p.type === 'round' ? sess.levels.heat : sess.levels.cool) / 100;
   await music.fadeTo(target * sess.levels.duck / 100, 1500, tok);
   if (tok !== engine.token || rtok !== engine.replayTok) return;
-  await narrate(p.cue, tok);
+  await narrate(p.cue, tok, p);
   if (tok !== engine.token || rtok !== engine.replayTok) return;
   narr.owner = null;
   await music.fadeTo(target, 3000, tok);
@@ -649,7 +753,7 @@ function tick() {
       } else { advance(); return; }
     }
   }
-  if (p && !engine.paused) checkInserts(p);
+  if (p && !engine.paused) { checkInserts(p); autoCallouts(p); }
   songTransitions();
   if (app.current === 'live') { render(); renderSong(); }
 }
@@ -669,7 +773,7 @@ function checkInserts(p) {
     if (ins.done) { if (!insertBusy && pos < ins.atMs - 3000) ins.done = false; continue; }   // went back before it: play it again
     if (pos < ins.atMs) continue;
     if (pos > ins.atMs + 20000) { ins.done = true; log('insert-skipped', ins.id); continue; }   // skipped past it
-    if (narr.active || insertBusy) return;                                                       // let the narrator finish first
+    if (narr.active || insertBusy || co.busy) return;                                            // let the narrator finish first
     ins.done = true;
     playInsert(p, ins);
     return;
@@ -678,8 +782,12 @@ function checkInserts(p) {
 
 async function playInsert(p, ins) {
   const id = S.insertCue(ins);
-  if (!clipUrls[id] && !cfg.fallbackVoice) { log('insert-missing', id); return; }
+  const text = S.cueText(sess, id);
+  const extra = calloutsFor(text, null);
+  const speech = !!clipUrls[id] || (cfg.fallbackVoice && !calloutOnly(text));
+  if (!speech && !(co.prep && (extra.before.length || extra.after.length))) { log('insert-missing', id); return; }
   const tok = engine.token;
+  const seq = narr.seq;                 // a Replay or stop while the music dips cancels this message
   insertBusy = true;
   const target = (p.type === 'round' ? sess.levels.heat : sess.levels.cool) / 100;
   const duck = (ins.duck ?? sess.levels.duck) / 100;
@@ -688,10 +796,16 @@ async function playInsert(p, ins) {
   try {
     await music.fadeTo(target * duck, 1200, tok);
     if (tok === engine.token) {
-      narr.active = id; renderNarr();
-      let r = clipUrls[id] ? await playUrl(clipUrls[id], vol) : 'none';
-      if ((r === 'none' || r === 'error') && cfg.fallbackVoice && tok === engine.token) r = await speak(S.cueText(sess, id));
-      if (tok === engine.token) { narr.active = null; renderNarr(); }
+      const live = () => tok === engine.token && seq === narr.seq;
+      for (const k of extra.before) { if (!live()) break; await playCallout(k, tok); }
+      let r = 'none';
+      if (speech && live()) {
+        narr.active = id; renderNarr();
+        r = clipUrls[id] ? await playUrl(clipUrls[id], vol) : 'none';
+        if ((r === 'none' || r === 'error') && cfg.fallbackVoice && live() && !calloutOnly(text)) r = await speak(text);
+        if (tok === engine.token && narr.active === id) { narr.active = null; renderNarr(); }
+      }
+      for (const k of extra.after) { if (!live()) break; await playCallout(k, tok); }
       log('insert-done', id, r);
     }
     await waitWhilePaused(tok);
@@ -888,8 +1002,15 @@ function renderQueue() {
 
 function renderNarr() {
   const card = $('#narrCard');
-  const c = narr.active && cueMeta[narr.active];
-  card.classList.toggle('speaking', !!c);
+  const isCo = !!narr.active && String(narr.active).startsWith('co:');
+  const c = !isCo && narr.active && cueMeta[narr.active];
+  card.classList.toggle('speaking', !!c || isCo);
+  if (isCo) {
+    const who = co.prep && co.prep.profile ? co.prep.profile.name : 'Callout';
+    $('#narrText').textContent = `${who}: “${calloutLabel(String(narr.active).slice(3))}”`;
+    $('#narrWhen').textContent = 'Callout';
+    return;
+  }
   $('#narrText').textContent = c ? `Speaking: ${c.title}` + (narr.tts ? ' (browser voice)' : '') : 'Quiet';
   $('#narrWhen').textContent = c ? c.when : '';
 }

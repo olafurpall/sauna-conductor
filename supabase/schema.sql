@@ -1,4 +1,4 @@
--- Sauna Conductor: database schema for Supabase (version 3).
+-- Sauna Conductor: database schema for Supabase (version 3.1).
 -- Run it in the Supabase dashboard → SQL Editor. Running it again is safe.
 --
 -- Model: every person has their own private space (a "workspace" with one owner).
@@ -9,6 +9,7 @@
 -- Each person's own Spotify login lives in user_settings, readable only by that person.
 -- The ElevenLabs and Anthropic keys never reach a browser: they live in app_secrets (or in the
 -- Edge Function secrets) and are used only by the server functions "eleven" and "write".
+-- Callout profiles (3.1): short clips a person recorded, set up by the admin, usable by everyone once published.
 
 -- ------------------------------------------------------------------ tables
 create table if not exists public.workspaces (
@@ -506,6 +507,89 @@ create policy "clips read"   on storage.objects for select to authenticated usin
 create policy "clips add"    on storage.objects for insert to authenticated with check (bucket_id = 'clips' and public.can_edit_path(name));
 create policy "clips change" on storage.objects for update to authenticated using (bucket_id = 'clips' and public.can_edit_path(name));
 create policy "clips remove" on storage.objects for delete to authenticated using (bucket_id = 'clips' and public.can_edit_path(name));
+
+-- ------------------------------------------------------------------ callouts (version 3.1)
+-- Short clips recorded by a person (a singer saying "Let's do this!", "Last song!"…) that sessions
+-- play next to the narration. The admin sets up the profiles and their clips; everyone signed in can
+-- use the published ones. A profile can only be published once the admin confirms the person agreed.
+create table if not exists public.callout_profiles (
+  id           uuid primary key default gen_random_uuid(),
+  name         text not null check (length(trim(name)) between 1 and 80),
+  about        text not null default '',
+  lang         text not null default 'is',
+  consent      boolean not null default false,              -- the admin confirmed the person agreed
+  published    boolean not null default false,
+  created_by   uuid references auth.users(id) on delete set null,
+  created_at   timestamptz not null default now(),
+  updated_at   timestamptz not null default now(),
+  constraint callout_published_needs_consent check (not published or consent)
+);
+
+-- Each clip is one take of one callout ("key"); a key can have several takes, picked at random.
+create table if not exists public.callout_clips (
+  id          uuid primary key default gen_random_uuid(),
+  profile_id  uuid not null references public.callout_profiles(id) on delete cascade,
+  key         text not null check (key ~ '^[a-z0-9][a-z0-9-]{0,39}$'),
+  said        text not null default '',                    -- what is said, e.g. "Gerum þetta!"
+  path        text not null,                               -- "<profile id>/<clip id>.<ext>" in the "callouts" bucket
+  type        text not null default 'audio/mpeg',
+  size        bigint not null default 0,
+  duration_ms integer,
+  created_at  timestamptz not null default now()
+);
+create index if not exists callout_clips_profile on public.callout_clips (profile_id);
+
+-- How the person agreed (the admin's own record). Only the admin can read it.
+create table if not exists public.callout_notes (
+  profile_id   uuid primary key references public.callout_profiles(id) on delete cascade,
+  consent_note text not null default '',
+  updated_at   timestamptz not null default now()
+);
+
+create or replace function public.callout_visible(pid uuid)
+returns boolean language sql stable security definer set search_path = public as $$
+  select public.is_admin() or exists (select 1 from public.callout_profiles p where p.id = pid and p.published);
+$$;
+create or replace function public.callout_path_visible(object_name text)
+returns boolean language sql stable security definer set search_path = public as $$
+  select case
+    when split_part(object_name, '/', 1) ~* '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'
+      then public.callout_visible(split_part(object_name, '/', 1)::uuid)
+    else false
+  end;
+$$;
+
+alter table public.callout_profiles enable row level security;
+alter table public.callout_clips    enable row level security;
+alter table public.callout_notes    enable row level security;
+drop policy if exists callout_read on public.callout_profiles;
+drop policy if exists callout_admin on public.callout_profiles;
+create policy callout_read  on public.callout_profiles for select to authenticated using (published or public.is_admin());
+create policy callout_admin on public.callout_profiles for all to authenticated using (public.is_admin()) with check (public.is_admin());
+drop policy if exists callout_clip_read on public.callout_clips;
+drop policy if exists callout_clip_admin on public.callout_clips;
+create policy callout_clip_read  on public.callout_clips for select to authenticated using (public.callout_visible(profile_id));
+create policy callout_clip_admin on public.callout_clips for all to authenticated using (public.is_admin()) with check (public.is_admin());
+drop policy if exists callout_note_admin on public.callout_notes;
+create policy callout_note_admin on public.callout_notes for all to authenticated using (public.is_admin()) with check (public.is_admin());
+
+revoke all on public.callout_profiles, public.callout_clips, public.callout_notes from anon;
+grant select, insert, update, delete on public.callout_profiles, public.callout_clips, public.callout_notes to authenticated;
+grant all on public.callout_profiles, public.callout_clips, public.callout_notes to service_role;
+revoke all on function public.callout_visible(uuid), public.callout_path_visible(text) from public, anon;
+grant execute on function public.callout_visible(uuid), public.callout_path_visible(text) to authenticated;
+
+insert into storage.buckets (id, name, public, file_size_limit)
+values ('callouts', 'callouts', false, 10485760)
+on conflict (id) do nothing;
+drop policy if exists "callouts read" on storage.objects;
+drop policy if exists "callouts add" on storage.objects;
+drop policy if exists "callouts change" on storage.objects;
+drop policy if exists "callouts remove" on storage.objects;
+create policy "callouts read"   on storage.objects for select to authenticated using (bucket_id = 'callouts' and public.callout_path_visible(name));
+create policy "callouts add"    on storage.objects for insert to authenticated with check (bucket_id = 'callouts' and public.is_admin());
+create policy "callouts change" on storage.objects for update to authenticated using (bucket_id = 'callouts' and public.is_admin());
+create policy "callouts remove" on storage.objects for delete to authenticated using (bucket_id = 'callouts' and public.is_admin());
 
 -- ------------------------------------------------------------------ moving to version 3 (one-time, safe to rerun)
 -- 1. One person per space. Anyone who shared a space with its owner keeps every session in it,

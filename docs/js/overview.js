@@ -1,14 +1,15 @@
 // Session page: one session at a glance (rounds, cool-downs, narration, messages inside songs),
 // with Run, Edit, Timeline and Share. Songs and messages can be previewed from here.
-import { $, h, toast, fmtSong, fmtDur, fmtDate, download, slug } from './util.js?v=3.0.1-b12beced';
-import { app } from './app.js?v=3.0.1-b12beced';
-import * as db from './db.js?v=3.0.1-b12beced';
-import * as S from './sessions.js?v=3.0.1-b12beced';
-import { langOf } from './script.js?v=3.0.1-b12beced';
-import { preview, previewButton } from './preview.js?v=3.0.1-b12beced';
-import { cloud, sharedWithMe, roleOf, sharedOut } from './cloud.js?v=3.0.1-b12beced';
-import { openInviteDialog } from './invite.js?v=3.0.1-b12beced';
-import { openLinkDialog } from './sharelink.js?v=3.0.1-b12beced';
+import { $, h, toast, fmtSong, fmtDur, fmtDate, download, slug } from './util.js?v=3.1-c91bd7fc';
+import { app } from './app.js?v=3.1-c91bd7fc';
+import * as db from './db.js?v=3.1-c91bd7fc';
+import * as S from './sessions.js?v=3.1-c91bd7fc';
+import { langOf } from './script.js?v=3.1-c91bd7fc';
+import { profileById } from './callouts.js?v=3.1-c91bd7fc';
+import { preview, previewButton } from './preview.js?v=3.1-c91bd7fc';
+import { cloud, sharedWithMe, roleOf, sharedOut } from './cloud.js?v=3.1-c91bd7fc';
+import { openInviteDialog } from './invite.js?v=3.1-c91bd7fc';
+import { openLinkDialog } from './sharelink.js?v=3.1-c91bd7fc';
 
 const el = $('#view-session');
 let s = null;
@@ -124,7 +125,8 @@ function render() {
     h('span', { class: 'chip' }, songs ? fmtDur(S.totalMs(s)) : `${t.rounds} × ${t.roundMin} min`),
     h('span', { class: 'chip' }, `${t.rounds} round${t.rounds === 1 ? '' : 's'} · ${t.breakMin} min cool-downs`),
     h('span', { class: 'chip' }, 'Voice: ' + s.voice.name.replace(/ - .*/, '')),
-    s.lang && s.lang !== 'en' ? h('span', { class: 'chip' }, langOf(s.lang).native) : null);
+    s.lang && s.lang !== 'en' ? h('span', { class: 'chip' }, langOf(s.lang).native) : null,
+    s.callouts && s.callouts.profile ? h('span', { class: 'chip' }, '📣 ' + ((profileById(s.callouts.profile) || {}).name || 'Callouts') + (s.callouts.auto ? ' · automatic' : '')) : null);
 
   el.append(
     h('div', { class: 'ov-top' }, h('button', { class: 'ghost small', onclick: () => app.show('library') }, '← Sessions'), actions),
@@ -140,7 +142,7 @@ function flow() {
   const insFor = (uri) => (s.inserts || []).filter((x) => x.uri === uri).sort((a, b) => a.atMs - b.atMs);
   const cueRow = (id, title) => {
     const st = S.clipState(s, id, recs[id]);
-    const chip = st === 'ready' || st === 'uploaded' ? null : h('span', { class: 'chip warn' }, st === 'missing' ? 'Not recorded' : 'Changed — record again');
+    const chip = S.clipOkState(st) ? null : h('span', { class: 'chip warn' }, st === 'missing' ? 'Not recorded' : 'Changed — record again');
     const text = S.cueText(s, id).replace(/\s+/g, ' ').trim();
     return h('div', { class: 'ov-cue' }, clipButton(id),
       h('div', { class: 'm' }, h('div', { class: 't' }, title, ' ', chip), h('div', { class: 'x' }, text.length > 220 ? text.slice(0, 219) + '…' : text)));

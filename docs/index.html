@@ -26,7 +26,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@400;500;600&family=IBM+Plex+Mono:wght@200;300;400&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="css/app.css?v=3.0.1-b12beced">
+<link rel="stylesheet" href="css/app.css?v=3.1-c91bd7fc">
 </head>
 <body class="phase-idle">
 <div class="sky" aria-hidden="true"></div>
@@ -46,6 +46,7 @@
       <div class="acct-menu" id="acctMenu" role="menu" hidden>
         <div class="acct-who" id="acctMenuWho"></div>
         <button role="menuitem" id="btnMenuSettings">Settings</button>
+      <button role="menuitem" id="btnMenuCallouts" hidden>Callouts</button>
         <button role="menuitem" id="btnMenuInstall" hidden>Install the app</button>
         <button role="menuitem" id="btnSignOutTop">Sign out</button>
       </div>
@@ -116,6 +117,9 @@
 
 <!-- ============================================================ Timeline -->
 <section class="view" id="view-timeline" hidden></section>
+
+<!-- ============================================================ Callouts (admin) -->
+<section class="view" id="view-callouts" hidden></section>
 
 <!-- ============================================================ Live -->
 <section class="view" id="view-live" hidden>
@@ -283,6 +287,6 @@
   // Signed-out visitors land on the front page: hide the app until it knows (avoids a flash of the app).
   try { if (!localStorage.getItem('sc.sb-auth') && location.protocol !== 'file:') document.body.classList.add('booting'); } catch (e) { /* ignore */ }
 </script>
-<script type="module" src="js/main.js?v=3.0.1-b12beced"></script>
+<script type="module" src="js/main.js?v=3.1-c91bd7fc"></script>
 </body>
 </html>

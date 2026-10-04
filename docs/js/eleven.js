@@ -1,7 +1,8 @@
 // ElevenLabs: voices, voice library, models and text-to-speech.
 // On the hosted site every call goes through the app's server function ("eleven"), which holds the
 // key; signed-in people never need one. Without the cloud (the launcher version) the user's own key is used.
-import { store, hash } from './util.js?v=3.0.1-b12beced';
+import { store, hash } from './util.js?v=3.1-c91bd7fc';
+import { stripTokens } from './tokens.js?v=3.1-c91bd7fc';
 
 const BASE = 'https://api.elevenlabs.io';
 
@@ -20,8 +21,9 @@ export function voiceSettings(v) {
 }
 
 // Delivery tags like [softly] only work in Eleven v3; other models would read them aloud.
+// Callout tokens like {callout-lets-start} are played from recordings, never read out.
 export function prepText(text, modelId) {
-  let t = String(text || '').replace(/\r/g, '').trim();
+  let t = stripTokens(String(text || '').replace(/\r/g, '')).trim();
   if (!isV3(modelId)) t = t.replace(/\[[^\]\n]{1,40}\]\s*/g, '');
   return t;
 }

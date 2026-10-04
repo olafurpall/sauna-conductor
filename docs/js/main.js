@@ -1,20 +1,21 @@
 // Boot: settings dialog, status pills, migration from v1, first view.
-import { $, $$, h, toast, uid, sleep, diagnostics, store } from './util.js?v=3.0.1-b12beced';
-import { app, cfg, saveCfg, legacyCfg, VERSION, DEFAULT_CLIENT_ID } from './app.js?v=3.0.1-b12beced';
-import * as db from './db.js?v=3.0.1-b12beced';
-import * as S from './sessions.js?v=3.0.1-b12beced';
-import { auth, login, logout, adoptLogin, handleRedirect, redirectUri, player, listDevices, parseUri } from './spotify.js?v=3.0.1-b12beced';
-import { eleven } from './eleven.js?v=3.0.1-b12beced';
-import { libraryView } from './library.js?v=3.0.1-b12beced';
-import { editorView } from './editor.js?v=3.0.1-b12beced';
-import { liveView } from './live.js?v=3.0.1-b12beced';
-import { sessionView } from './overview.js?v=3.0.1-b12beced';
-import { timelineView } from './timeline.js?v=3.0.1-b12beced';
-import { preview } from './preview.js?v=3.0.1-b12beced';
-import { cloud, initCloud, cloudSummary, callFunction } from './cloud.js?v=3.0.1-b12beced';
-import { initAccount, paintAccount } from './account.js?v=3.0.1-b12beced';
-import { welcomeView, onboardView, route, holdRoute, onboarded, takeLinkFromUrl, afterSpotifyRedirect } from './gate.js?v=3.0.1-b12beced';
-import { registerServiceWorker } from './pwa.js?v=3.0.1-b12beced';
+import { $, $$, h, toast, uid, sleep, diagnostics, store } from './util.js?v=3.1-c91bd7fc';
+import { app, cfg, saveCfg, legacyCfg, VERSION, DEFAULT_CLIENT_ID } from './app.js?v=3.1-c91bd7fc';
+import * as db from './db.js?v=3.1-c91bd7fc';
+import * as S from './sessions.js?v=3.1-c91bd7fc';
+import { auth, login, logout, adoptLogin, handleRedirect, redirectUri, player, listDevices, parseUri } from './spotify.js?v=3.1-c91bd7fc';
+import { eleven } from './eleven.js?v=3.1-c91bd7fc';
+import { libraryView } from './library.js?v=3.1-c91bd7fc';
+import { editorView } from './editor.js?v=3.1-c91bd7fc';
+import { liveView } from './live.js?v=3.1-c91bd7fc';
+import { sessionView } from './overview.js?v=3.1-c91bd7fc';
+import { timelineView } from './timeline.js?v=3.1-c91bd7fc';
+import { calloutsView } from './calloutadmin.js?v=3.1-c91bd7fc';
+import { preview } from './preview.js?v=3.1-c91bd7fc';
+import { cloud, initCloud, cloudSummary, callFunction } from './cloud.js?v=3.1-c91bd7fc';
+import { initAccount, paintAccount } from './account.js?v=3.1-c91bd7fc';
+import { welcomeView, onboardView, route, holdRoute, onboarded, takeLinkFromUrl, afterSpotifyRedirect } from './gate.js?v=3.1-c91bd7fc';
+import { registerServiceWorker } from './pwa.js?v=3.1-c91bd7fc';
 
 registerServiceWorker();
 app.register('welcome', welcomeView);
@@ -24,6 +25,7 @@ app.register('editor', editorView);
 app.register('live', liveView);
 app.register('session', sessionView);
 app.register('timeline', timelineView);
+app.register('callouts', calloutsView);
 preview.isRunning = () => liveView.running;
 
 // ---------------------------------------------------------------- header
