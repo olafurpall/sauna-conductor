@@ -195,16 +195,20 @@
 
     <section class="set-sec" id="set-spotify">
       <h3>Spotify</h3>
-      <p class="help">Each person connects their own Spotify account (Premium). The account must also be on the user list of the Spotify developer app (see README). When you're signed in, your Spotify login is saved in your account, so other computers don't need to connect again.</p>
-      <div class="grid2">
-        <label class="f">Client ID (from your Spotify app)<input type="text" id="cfgClientId" autocomplete="off" spellcheck="false" placeholder="32-character Client ID"></label>
-        <div class="f">Redirect URI (copy this into Spotify)<div class="row"><span class="code" id="redirectUri"></span><button class="small" id="btnCopyRedirect">Copy</button></div></div>
-      </div>
+      <p class="help">Press <b>Connect Spotify</b> and log in with your own Spotify account (Premium). There's nothing else to set up: Sauna Conductor already has its Spotify app. Your Spotify account just has to be on that app's user list, so if Spotify turns you away, ask Ólafur to add the email address you log in to Spotify with. When you're signed in here, your Spotify login is saved in your account, so other computers connect by themselves.</p>
+      <div class="banner warn" id="spCustom" hidden>This browser is set to a different Spotify app than the shared one, which is why connecting may fail. <button class="small primary" id="btnSharedApp">Use the shared app</button></div>
       <div class="row mt">
         <button class="small primary" id="btnConnect">Connect Spotify</button>
         <button class="small" id="btnDisconnect">Disconnect</button>
         <span class="muted small" id="spDetail"></span>
       </div>
+      <details class="mt sp-adv" id="spAdvanced">
+        <summary class="muted small">Advanced: use a different Spotify app (not needed)</summary>
+        <div class="grid2 mt">
+          <label class="f">Client ID<input type="text" id="cfgClientId" autocomplete="off" spellcheck="false" placeholder="32-character Client ID"></label>
+          <div class="f">Redirect URI (that app needs this)<div class="row"><span class="code" id="redirectUri"></span><button class="small" id="btnCopyRedirect">Copy</button></div></div>
+        </div>
+      </details>
     </section>
 
     <section class="set-sec" id="set-eleven">

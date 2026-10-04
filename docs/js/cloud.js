@@ -2,12 +2,12 @@
 // sessions, recorded narration, run history, play counts, the ElevenLabs key and your Spotify login.
 // Single sessions can also be shared with people outside the workspace (collaborators).
 // The browser's own storage stays the working copy, so everything keeps working offline.
-import { SUPABASE_URL, SUPABASE_KEY } from './config.js?v=2.5-6e8466df';
-import { app } from './app.js?v=2.5-6e8466df';
-import { store, log, toast, sleep } from './util.js?v=2.5-6e8466df';
-import * as db from './db.js?v=2.5-6e8466df';
-import { eleven } from './eleven.js?v=2.5-6e8466df';
-import { countsAsPlay } from './sessions.js?v=2.5-6e8466df';
+import { SUPABASE_URL, SUPABASE_KEY } from './config.js?v=2.5.1-24e6cfcc';
+import { app } from './app.js?v=2.5.1-24e6cfcc';
+import { store, log, toast, sleep } from './util.js?v=2.5.1-24e6cfcc';
+import * as db from './db.js?v=2.5.1-24e6cfcc';
+import { eleven } from './eleven.js?v=2.5.1-24e6cfcc';
+import { countsAsPlay } from './sessions.js?v=2.5.1-24e6cfcc';
 
 const Q = { quiet: true };            // local writes made by sync must not trigger another upload
 const BUCKET = 'clips';

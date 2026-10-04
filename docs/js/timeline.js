@@ -2,13 +2,13 @@
 // narration at each phase) to place extra messages anywhere, even in the middle of a song.
 // A message is recorded with the session's voice, dragged to its spot, and given its own music
 // dip and narrator volume. "Hear it in place" plays the song there with the message on top.
-import { $, h, toast, fmtSong, clamp, sleep } from './util.js?v=2.5-6e8466df';
-import { app } from './app.js?v=2.5-6e8466df';
-import * as db from './db.js?v=2.5-6e8466df';
-import * as S from './sessions.js?v=2.5-6e8466df';
-import { eleven, clipKey, prepText, isV3 } from './eleven.js?v=2.5-6e8466df';
-import { preview } from './preview.js?v=2.5-6e8466df';
-import { player } from './spotify.js?v=2.5-6e8466df';
+import { $, h, toast, fmtSong, clamp, sleep } from './util.js?v=2.5.1-24e6cfcc';
+import { app } from './app.js?v=2.5.1-24e6cfcc';
+import * as db from './db.js?v=2.5.1-24e6cfcc';
+import * as S from './sessions.js?v=2.5.1-24e6cfcc';
+import { eleven, clipKey, prepText, isV3 } from './eleven.js?v=2.5.1-24e6cfcc';
+import { preview } from './preview.js?v=2.5.1-24e6cfcc';
+import { player } from './spotify.js?v=2.5.1-24e6cfcc';
 
 const el = $('#view-timeline');
 let s = null;

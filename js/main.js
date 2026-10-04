@@ -1,6 +1,6 @@
 // Boot: settings dialog, status pills, migration from v1, first view.
 import { $, $$, h, toast, uid, sleep, diagnostics } from './util.js';
-import { app, cfg, saveCfg, legacyCfg, VERSION } from './app.js';
+import { app, cfg, saveCfg, legacyCfg, VERSION, DEFAULT_CLIENT_ID } from './app.js';
 import * as db from './db.js';
 import * as S from './sessions.js';
 import { auth, login, logout, adoptLogin, handleRedirect, redirectUri, player, listDevices, parseUri } from './spotify.js';
@@ -32,6 +32,7 @@ function renderPills() {
   sp.className = 'pill';
   if (cfg.demo) { sp.textContent = 'Demo mode'; sp.classList.add('warn'); }
   else if (!auth.connected) sp.textContent = 'Spotify not connected';
+  else if (auth.problem) { sp.textContent = 'Spotify: not allowed yet'; sp.classList.add('warn'); }
   else if (!auth.libraryOk) { sp.textContent = 'Spotify: reconnect'; sp.classList.add('warn'); }
   else if (player.ready) { sp.textContent = (player.mode === 'connect' ? 'Spotify → ' + (cfg.deviceName || 'device') : 'Spotify ready') + (auth.me && auth.me.display_name ? ' · ' + auth.me.display_name : ''); sp.classList.add('ok'); }
   else { sp.textContent = player.mode === 'connect' ? 'Spotify: choose device' : 'Spotify starting…'; sp.classList.add('warn'); }
@@ -58,8 +59,10 @@ dlg.addEventListener('close', () => { renderPills(); app.emit('spotify'); });
 function paintSettings() {
   paintAccount();
   $('#cfgClientId').value = cfg.clientId;
+  $('#spCustom').hidden = cfg.clientId === DEFAULT_CLIENT_ID || !!cfg.demo;
   $('#redirectUri').textContent = redirectUri();
   $('#spDetail').textContent = !auth.connected ? 'Not connected.'
+    : auth.problem ? 'Connected, but Spotify says ' + auth.problem + '.'
     : !auth.libraryOk ? 'Connected, but without playlist access. Press Connect Spotify again to allow it.'
     : 'Connected' + (auth.me && auth.me.display_name ? ' as ' + auth.me.display_name : '') + '.';
   $('#btnConnect').textContent = auth.connected ? 'Reconnect Spotify' : 'Connect Spotify';
@@ -74,9 +77,16 @@ function paintSettings() {
   $('#cfgFallback').checked = !!cfg.fallbackVoice;
 }
 
-$('#cfgClientId').addEventListener('change', (e) => { cfg.clientId = e.target.value.trim(); saveCfg(); });
+$('#cfgClientId').addEventListener('change', (e) => { cfg.clientId = e.target.value.trim() || DEFAULT_CLIENT_ID; saveCfg(); paintSettings(); });
+$('#btnSharedApp').addEventListener('click', () => {
+  const was = cfg.clientId;
+  cfg.clientId = DEFAULT_CLIENT_ID; saveCfg();
+  if (was !== DEFAULT_CLIENT_ID && auth.connected) logout(false);   // a login made with another app doesn't work with this one
+  paintSettings(); renderPills();
+  toast('Using the shared Spotify app. Now press Connect Spotify.');
+});
 $('#btnCopyRedirect').addEventListener('click', () => navigator.clipboard.writeText(redirectUri()).then(() => toast('Copied.', 1500)).catch(() => toast('Select the address and copy it.')));
-$('#btnConnect').addEventListener('click', () => { cfg.clientId = $('#cfgClientId').value.trim(); saveCfg(); login(); });
+$('#btnConnect').addEventListener('click', () => { cfg.clientId = $('#cfgClientId').value.trim() || DEFAULT_CLIENT_ID; saveCfg(); login(); });
 $('#btnDisconnect').addEventListener('click', () => { logout(true); paintSettings(); renderPills(); });
 
 async function checkEleven(showToast) {

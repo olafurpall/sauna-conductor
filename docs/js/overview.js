@@ -1,12 +1,12 @@
 // Session page: one session at a glance (rounds, cool-downs, narration, messages inside songs),
 // with Run, Edit, Timeline and Share. Songs and messages can be previewed from here.
-import { $, h, toast, fmtSong, fmtDur, fmtDate, download, slug } from './util.js?v=2.5-6e8466df';
-import { app } from './app.js?v=2.5-6e8466df';
-import * as db from './db.js?v=2.5-6e8466df';
-import * as S from './sessions.js?v=2.5-6e8466df';
-import { preview, previewButton } from './preview.js?v=2.5-6e8466df';
-import { cloud, sharedWithMe } from './cloud.js?v=2.5-6e8466df';
-import { openShareDialog } from './share.js?v=2.5-6e8466df';
+import { $, h, toast, fmtSong, fmtDur, fmtDate, download, slug } from './util.js?v=2.5.1-24e6cfcc';
+import { app } from './app.js?v=2.5.1-24e6cfcc';
+import * as db from './db.js?v=2.5.1-24e6cfcc';
+import * as S from './sessions.js?v=2.5.1-24e6cfcc';
+import { preview, previewButton } from './preview.js?v=2.5.1-24e6cfcc';
+import { cloud, sharedWithMe } from './cloud.js?v=2.5.1-24e6cfcc';
+import { openShareDialog } from './share.js?v=2.5.1-24e6cfcc';
 
 const el = $('#view-session');
 let s = null;

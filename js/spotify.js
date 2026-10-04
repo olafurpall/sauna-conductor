@@ -20,6 +20,7 @@ export const auth = {
   expires: saved ? saved.e || 0 : 0,
   scope: saved ? saved.s || '' : '',
   me: null,
+  problem: '',   // e.g. the account isn't on the Spotify app's user list
   get connected() { return !!this.refresh; },
   get libraryOk() { const s = this.scope.split(/\s+/); return this.connected && LIB_SCOPES.every((x) => s.includes(x)); },
 };
@@ -52,7 +53,7 @@ function saveTokens(j) {
 
 // everywhere: also forget the login saved in your account (cloud sync).
 export function logout(everywhere = false) {
-  auth.token = auth.refresh = null; auth.expires = 0; auth.scope = ''; auth.me = null;
+  auth.token = auth.refresh = null; auth.expires = 0; auth.scope = ''; auth.me = null; auth.problem = '';
   store.del('tok');
   if (everywhere) { store.set('tokAt', Date.now()); app.emit('spotify-tokens', null); }
   player.shutdown();
@@ -145,6 +146,7 @@ export async function api(method, path, body, attempt = 0) {
     let msg = r.statusText;
     try { const j = await r.json(); msg = (j.error && (j.error.message || j.error)) || msg; } catch { /* no body */ }
     if (r.status === 403 && /scope/i.test(msg)) msg = 'Reconnect Spotify in Settings to allow playlist access';
+    else if (r.status === 403 && /regist|developer\.spotify|dashboard/i.test(msg)) msg = 'this Spotify account is not on Sauna Conductor\u2019s user list yet. Ask Ólafur to add the email address you log in to Spotify with';
     const e = new Error(`Spotify: ${msg}`); e.status = r.status; throw e;
   }
   const txt = await r.text();
@@ -347,9 +349,15 @@ export const player = {
     clearInterval(this.timer);
     this.timer = setInterval(() => this.poll(), this.mode === 'browser' ? 1000 : 1500);
     getMe().then((me) => {
+      auth.problem = '';
       app.emit('spotify');
       if (me && me.product && me.product !== 'premium') toast('This Spotify account is not Premium, so playback will not work.', 8000);
-    }).catch(() => {});
+    }).catch((e) => {
+      if (e.status !== 403) return;
+      auth.problem = e.message.replace(/^Spotify: /, '');
+      toast('Spotify: ' + auth.problem + '.', 15000);
+      app.emit('spotify');
+    });
   },
 
   restart() { this.shutdown(); this.start(); app.emit('spotify'); },

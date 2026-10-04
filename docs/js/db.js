@@ -1,5 +1,5 @@
 // IndexedDB: saved sessions and their narration clips (MP3 blobs).
-import { app } from './app.js?v=2.5-6e8466df';
+import { app } from './app.js?v=2.5.1-24e6cfcc';
 
 const NAME = 'sauna-conductor';
 const VERSION = 2;

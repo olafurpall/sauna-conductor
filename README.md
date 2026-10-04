@@ -30,9 +30,11 @@ The header shows **Synced · Ólafur** when everything is in the cloud.
 
 ### 3. Connect Spotify (each person, once)
 
-**Settings → Spotify → Connect Spotify** and approve. Everyone connects their own Spotify Premium account. Your Spotify login is saved in your account (only you can read it), so your other computers connect by themselves.
+**Settings → Spotify → Connect Spotify**, log in with your own Spotify Premium account and press **Agree**. Nobody needs their own Spotify app or Client ID: everyone uses the shared one, *Thora sauna conductor*. Your Spotify login is saved in your account (only you can read it), so your other computers connect by themselves.
 
-Spotify only lets accounts on the app's user list in: <https://developer.spotify.com/dashboard> → *Thora sauna conductor* → **User Management** → add the name and email of each Spotify account (up to 5).
+Spotify only lets accounts on the app's user list in: <https://developer.spotify.com/dashboard> → *Thora sauna conductor* → **User Management** → add the name and the email the person logs in to Spotify with (up to 5). If someone is turned away, it's almost always because the email there doesn't match their Spotify login.
+
+If Settings → Spotify shows *"This browser is set to a different Spotify app"*, press **Use the shared app**, then Connect Spotify.
 
 ### 4. Add the ElevenLabs API key (once, for everyone)
 

@@ -1,13 +1,13 @@
 // Session creator / editor: playlists, timing, voice, editable narration, recording.
-import { $, $$, h, toast, fmtDur, fmtSong, autosize, pickFile, sleep, now } from './util.js?v=2.5-6e8466df';
-import { planRounds, planBreaks } from './planner.js?v=2.5-6e8466df';
-import { app, cfg } from './app.js?v=2.5-6e8466df';
-import * as db from './db.js?v=2.5-6e8466df';
-import * as S from './sessions.js?v=2.5-6e8466df';
-import { cuePlan, defaultText } from './script.js?v=2.5-6e8466df';
-import { eleven, isV3, clipKey, prepText } from './eleven.js?v=2.5-6e8466df';
-import { auth, myPlaylists, parseUri, playlistInfo, sourceTracks, searchTracks } from './spotify.js?v=2.5-6e8466df';
-import { preview, previewButton } from './preview.js?v=2.5-6e8466df';
+import { $, $$, h, toast, fmtDur, fmtSong, autosize, pickFile, sleep, now } from './util.js?v=2.5.1-24e6cfcc';
+import { planRounds, planBreaks } from './planner.js?v=2.5.1-24e6cfcc';
+import { app, cfg } from './app.js?v=2.5.1-24e6cfcc';
+import * as db from './db.js?v=2.5.1-24e6cfcc';
+import * as S from './sessions.js?v=2.5.1-24e6cfcc';
+import { cuePlan, defaultText } from './script.js?v=2.5.1-24e6cfcc';
+import { eleven, isV3, clipKey, prepText } from './eleven.js?v=2.5.1-24e6cfcc';
+import { auth, myPlaylists, parseUri, playlistInfo, sourceTracks, searchTracks } from './spotify.js?v=2.5.1-24e6cfcc';
+import { preview, previewButton } from './preview.js?v=2.5.1-24e6cfcc';
 
 const el = $('#view-editor');
 let s = null;            // the session being edited

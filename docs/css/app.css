@@ -530,3 +530,9 @@ body.editing .pv { bottom: 84px; }
 .tl-art { width: 44px; height: 44px; border-radius: 6px; object-fit: cover; }
 dialog.share-dlg { width: min(620px, calc(100vw - 32px)); background: var(--bg2); color: var(--text); border: 1px solid var(--line); border-radius: 18px; padding: 0; }
 dialog.share-dlg input[type=email] { flex: 1 1 260px; min-width: 0; }
+
+/* Settings → Spotify: the advanced fold for a different Spotify app */
+.sp-adv summary { cursor: pointer; width: fit-content; }
+.sp-adv[open] summary { margin-bottom: 4px; }
+#spCustom { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin: 10px 0 0; }
+#spCustom[hidden] { display: none; }
