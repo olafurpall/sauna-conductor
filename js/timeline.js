@@ -2,13 +2,17 @@
 // narration at each phase) to place extra messages anywhere, even in the middle of a song.
 // A message is recorded with the session's voice, dragged to its spot, and given its own music
 // dip and narrator volume. "Hear it in place" plays the song there with the message on top.
-import { roleOf } from './cloud.js';
+import { cloud, roleOf } from './cloud.js';
 import { $, h, toast, fmtSong, clamp, sleep } from './util.js';
 import { app } from './app.js';
 import * as db from './db.js';
 import * as S from './sessions.js';
 import { eleven, clipKey, prepText, isV3 } from './eleven.js';
 import { chooseRecording } from './recorder.js';
+import { sessionLayout, songAtIn, insertStartIn, busyIntervals, fitTime, songPos, messageMs, recordedMsGuess } from './placement.js';
+import { openGallery, closeGallery, insertAtCursor, trackCursor, tokenChips, suggestDialog } from './calloutpick.js';
+import { usable, saysOf, describeRef, profileById, profileBySlug, loadProfiles, clipBlob, CALLOUT_MUSIC } from './callouts.js';
+import { tokenFor, refsIn, calloutOnly, parseRef } from './tokens.js';
 import { preview } from './preview.js';
 import { player } from './spotify.js';
 
@@ -35,18 +39,21 @@ export const timelineView = {
     recs = await db.clips.forSession(s.id);
     sel = null; dragOn = false;
     render();
+    if (cloud.configured) loadProfiles();          // callout authors for the gallery
     clearInterval(playheadTimer);
     playheadTimer = setInterval(paintPlayhead, 120);
   },
   async leave() {
     clearInterval(playheadTimer);
     preview.stop();
+    closeGallery();
     if (recording) { toast('Wait until the recording has finished.'); return false; }
     await flush();
     return true;
   },
 };
 
+app.on('callouts', () => { if (app.current === 'timeline' && s && !dragOn && !recording) render(); });
 app.on('cloud-data', async () => {
   if (app.current !== 'timeline' || !s || saveTimer || recording || dragOn) return;
   const x = await db.sessions.get(s.id);
@@ -83,44 +90,25 @@ function clipMs(cueId) {
     a.src = url;
   }
   const k = rec ? `${cueId}:${rec.at}` : null;
-  if (k && durCache.get(k)) return durCache.get(k);
-  // Not recorded (or not measured yet): about 14 characters a second.
-  return Math.max(2000, Math.round(prepText(S.cueText(s, cueId), s.voice.modelId).length / 14 * 1000));
+  // The recording (measured; until then about 14 characters a second) plus the message's callouts.
+  return messageMs(s, cueId, (k && durCache.get(k)) || recordedMsGuess(rec));
 }
 
 // ---------------------------------------------------------------- layout: session time of every song and message
-function buildLayout() {
-  const R = s.timing.rounds;
-  const segs = [], songs = [];
-  let t = 0;
-  for (const ph of S.phaseLists(s)) {
-    const start = t;
-    const cue = ph.type === 'round' ? (ph.n === 1 ? 'welcome' : ph.n === R && R > 1 ? 'final' : 'round' + ph.n) : 'end' + ph.n;
-    if (ph.type === 'round') {
-      for (const [k, song] of ph.songs.entries()) { songs.push({ song, start: t, end: t + song.durationMs, phase: ph, k }); t += song.durationMs; }
-    } else {
-      const limit = ph.limitMs;
-      let x = t;
-      for (const [k, song] of (ph.songs || []).entries()) {
-        if (x - t >= limit) break;
-        const end = Math.min(x + song.durationMs, t + limit);
-        songs.push({ song, start: x, end, cut: end < x + song.durationMs, phase: ph, k });
-        x += song.durationMs;
-      }
-      t += limit;
-    }
-    segs.push({ ph, start, end: t, cue });
-  }
-  const closeMs = Math.max(60000, clipMs('closing') + 20000);
-  segs.push({ ph: { type: 'closing', label: 'Closing', key: 'closing' }, start: t, end: t + closeMs, cue: 'closing' });
-  t += closeMs;
-  return { segs, songs, total: t };
-}
-
-const songAt = (ms) => layout.songs.find((x) => ms >= x.start && ms < x.end) || null;
-function insertStart(ins) {
-  const x = layout.songs.find((y) => y.song.uri === ins.uri);
-  return x ? x.start + ins.atMs : null;
+const buildLayout = () => sessionLayout(s, clipMs);
+const songAt = (ms) => songAtIn(layout, ms);
+const insertStart = (ins) => insertStartIn(layout, ins);
+// Puts a message at (or as near as possible to) a session time where it doesn't play over another.
+// Returns false if there's no room; says so when it had to move it.
+function placeAt(ins, want, quiet = false) {
+  const len = clipMs(S.insertCue(ins));
+  const t = fitTime(layout, busyIntervals(s, layout, clipMs, ins.id), len, want);
+  if (t == null) { toast('There’s no room there without playing over another message.'); return false; }
+  const pos = songPos(layout, t);
+  if (!pos) return false;
+  ins.uri = pos.uri; ins.atMs = pos.atMs;
+  if (!quiet && Math.abs(t - want) >= 1000) toast(`Moved to ${fmtSong(pos.atMs)} in “${songAt(t).song.name}” so it doesn't play over another message.`, 3500);
+  return true;
 }
 
 // ---------------------------------------------------------------- rendering
@@ -157,16 +145,21 @@ function render() {
   zoomOut.addEventListener('click', () => zoomTo(-1));
   zoomIn.addEventListener('click', () => zoomTo(1));
   const add = h('button', { class: 'primary small' }, '+ Add a message');
-  add.addEventListener('click', addInsert);
+  add.addEventListener('click', () => addInsert());
+  const coOn = cloud.configured && usable().length;
+  const addCo = coOn ? h('button', { class: 'small', title: 'Add a callout at the cursor', 'aria-haspopup': 'dialog' }, '📣 Add a callout') : null;
+  if (addCo) addCo.addEventListener('click', () => addCallout(addCo));
+  const sug = coOn ? h('button', { class: 'small ghost', title: 'Place one author’s callouts at good moments' }, '📣 Suggest callouts') : null;
+  if (sug) sug.addEventListener('click', () => suggestDialog(s, (r, p) => { changed(); render(); toast(`Added ${r.tokens + r.inserts} callouts by ${p.name}. Drag any of them to move it.`, 4000); }, clipMs));
 
   const top = h('div', { class: 'tl-top' },
     h('button', { class: 'ghost small', onclick: () => app.show('session', s.id) }, '← Session'),
     h('h1', {}, s.name || 'Untitled session'),
     h('span', { class: 'spacer' }),
     h('span', { class: 'muted small tl-status' }),
-    h('div', { class: 'row' }, h('span', { class: 'muted small' }, 'Zoom'), zoomOut, zoomIn), add);
+    h('div', { class: 'row' }, h('span', { class: 'muted small' }, 'Zoom'), zoomOut, zoomIn), sug, addCo, add);
   const help = h('p', { class: 'muted small tl-help' },
-    'Click a song to put the cursor there, then “Add a message”. Drag a message to move it, even into the middle of a song. ',
+    'Click a song to put the cursor there, then “Add a message” or “Add a callout”. Drag a message or callout to move it, even into the middle of a song; messages never play over each other. ',
     'Each message can dip the music by its own amount. Orange: rounds. Blue: cool-downs.');
 
   // canvas
@@ -207,7 +200,9 @@ function render() {
   for (const sg of layout.segs) {
     const ms = clipMs(sg.cue);
     const st = S.clipState(s, sg.cue, recs[sg.cue]);
-    narr.append(h('div', { class: 'tl-cue' + (st === 'missing' || st === 'outdated' ? ' todo' : ''), style: { left: x(sg.start), width: w(ms) }, title: `${S.cueText(s, sg.cue).slice(0, 140)}…` }, h('span', {}, sg.ph.label)));
+    if (st === 'off' && !ms) continue;                // without narration (and no callouts): nothing plays
+    narr.append(h('div', { class: 'tl-cue' + (st === 'missing' || st === 'outdated' ? ' todo' : '') + (st === 'off' ? ' off' : ''), style: { left: x(sg.start), width: w(ms) },
+      title: st === 'off' ? `${sg.ph.label}: only its callouts play (without AI narration)` : `${S.cueText(s, sg.cue).slice(0, 140)}…` }, h('span', {}, sg.ph.label)));
   }
   for (const ins of s.inserts || []) {
     const at = insertStart(ins);
@@ -216,9 +211,11 @@ function render() {
     const ms = clipMs(cue);
     const st = S.clipState(s, cue, recs[cue]);
     const on = sel && sel.type === 'insert' && sel.id === ins.id;
-    const b = h('div', { class: 'tl-ins' + (on ? ' sel' : '') + (st === 'missing' || st === 'outdated' ? ' todo' : ''), style: { left: x(at), width: w(ms) },
-      tabindex: '0', role: 'button', 'aria-label': `Message at ${fmtSong(ins.atMs)}: ${ins.text || 'empty'}`, title: (ins.text || 'Empty message') + ' — drag to move' },
-    h('span', {}, ins.text || 'New message'));
+    const only = calloutOnly(ins.text);
+    const label = only ? '📣 ' + refsIn(ins.text).map((r) => describeRef(r, profileById(s.callouts && s.callouts.profile))).join(' · ') : (ins.text || 'New message');
+    const b = h('div', { class: 'tl-ins' + (only ? ' co' : '') + (on ? ' sel' : '') + (st === 'missing' || st === 'outdated' ? ' todo' : ''), style: { left: x(at), width: w(ms) },
+      tabindex: '0', role: 'button', 'aria-label': `${only ? 'Callout' : 'Message'} at ${fmtSong(ins.atMs)}: ${label}`, title: label + ' — drag to move, Delete to remove' },
+    h('span', {}, label));
     dragInsert(b, ins);
     narr.append(b);
   }
@@ -280,8 +277,7 @@ function dragInsert(b, ins) {
     if (!sn) { toast('Drop the message on a song.'); render(); return; }
     // the session may have been reloaded while dragging: move the message in the current copy
     const cur = (s.inserts || []).find((x) => x.id === ins.id) || ins;
-    cur.uri = sn.song.uri;
-    cur.atMs = clamp(Math.round((at - sn.start) / 500) * 500, 0, Math.max(0, sn.song.durationMs - 1000));
+    if (!placeAt(cur, at)) { render(); return; }
     sel = { type: 'insert', id: ins.id };
     changed(); render();
   };
@@ -289,6 +285,7 @@ function dragInsert(b, ins) {
   b.addEventListener('pointercancel', () => { b.classList.remove('dragging'); dragOn = false; render(); });
   b.addEventListener('keydown', (e) => {
     if (e.key === 'Enter') { sel = { type: 'insert', id: ins.id }; render(); }
+    if ((e.key === 'Delete' || e.key === 'Backspace') && (calloutOnly(ins.text) || !ins.text.trim() || confirm('Delete this message?'))) { e.preventDefault(); deleteInsert(ins); }
     if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') { e.preventDefault(); nudge(ins, (e.key === 'ArrowLeft' ? -1 : 1) * (e.shiftKey ? 5000 : 1000)); }
   });
 }
@@ -296,28 +293,39 @@ function dragInsert(b, ins) {
 function nudge(ins, ms) {
   const sn = layout.songs.find((y) => y.song.uri === ins.uri);
   if (!sn) return;
-  const at = insertStart(ins) + ms;
-  const to = songAt(clamp(at, 0, layout.total - 1)) || sn;
-  ins.uri = to.song.uri;
-  ins.atMs = clamp(Math.round((at - to.start) / 500) * 500, 0, Math.max(0, to.song.durationMs - 1000));
+  const at = clamp(insertStart(ins) + ms, 0, layout.total - 1);
+  if (!placeAt(ins, at)) return;
   sel = { type: 'insert', id: ins.id };
   changed(); render();
   const nb = $('.tl-ins.sel', el); if (nb) nb.focus();
 }
 
-function addInsert() {
-  let uri, atMs;
-  if (sel && sel.type === 'song') { uri = sel.uri; atMs = sel.atMs; }
-  else {
-    const first = layout.songs[0];
-    if (!first) { toast('There are no songs to place a message in.'); return; }
-    uri = first.song.uri; atMs = Math.min(60000, Math.max(0, first.song.durationMs - 30000));
-  }
-  const ins = S.newInsert({ uri, atMs });
+// Where a new message goes: at the cursor, or a minute into the first song.
+function cursorTime() {
+  if (sel && sel.type === 'song') { const sn = layout.songs.find((y) => y.song.uri === sel.uri); if (sn) return sn.start + sel.atMs; }
+  const first = layout.songs[0];
+  return first ? first.start + Math.min(60000, Math.max(0, first.song.durationMs - 30000)) : null;
+}
+function addInsert(text = '') {
+  const want = cursorTime();
+  if (want == null) { toast('There are no songs to place a message in.'); return; }
+  const ins = S.newInsert({ text });
   s.inserts.push(ins);
+  if (!placeAt(ins, want)) { s.inserts = s.inserts.filter((x) => x !== ins); return; }
   sel = { type: 'insert', id: ins.id };
   changed(); render();
-  const ta = $('.tl-insp textarea', el); if (ta) ta.focus();
+  if (!text) { const ta = $('.tl-insp textarea', el); if (ta) ta.focus(); }
+}
+function addCallout(anchor) {
+  openGallery(anchor, (p, k) => { addInsert(tokenFor(p.slug, k)); toast(`Added “${saysOf(p, k)}”. Drag it to move it.`, 2500); },
+    { hint: 'Click one to add it at the cursor. It never plays over another message.' });
+}
+function deleteInsert(ins) {
+  s.inserts = s.inserts.filter((x) => x !== ins);
+  const cue = S.insertCue(ins);
+  db.clips.del(s.id, cue).catch(() => {});
+  delete recs[cue];
+  sel = null; changed(); render();
 }
 
 // ---------------------------------------------------------------- inspector
@@ -333,11 +341,13 @@ function inspector() {
     const play = h('button', { class: 'small' }, `▶ Play from ${fmtSong(sel.atMs)}`);
     play.addEventListener('click', () => preview.play(sn.song, { startMs: sel.atMs }));
     const add = h('button', { class: 'small primary' }, `+ Add a message at ${fmtSong(sel.atMs)}`);
-    add.addEventListener('click', addInsert);
+    add.addEventListener('click', () => addInsert());
+    const co = cloud.configured && usable().length ? h('button', { class: 'small', 'aria-haspopup': 'dialog' }, `📣 Add a callout at ${fmtSong(sel.atMs)}`) : null;
+    if (co) co.addEventListener('click', () => addCallout(co));
     box.append(h('div', { class: 'row' },
       sn.song.imageSm ? h('img', { class: 'tl-art', src: sn.song.imageSm, alt: '' }) : null,
       h('div', {}, h('b', {}, sn.song.name), h('div', { class: 'muted small' }, `${sn.song.artists} · ${sn.phase.label} · ${fmtSong(sn.song.durationMs)}`)),
-      h('span', { class: 'spacer' }), play, add));
+      h('span', { class: 'spacer' }), play, co, add));
     return box;
   }
   const ins = (s.inserts || []).find((x) => x.id === sel.id);
@@ -353,21 +363,26 @@ function inspector() {
     const stt = recording === ins.id ? 'recording' : S.clipState(s, cue, recs[cue]);
     const [c, l] = { recording: ['chip info', 'Recording…'], ready: ['chip ok', `Recorded · ${fmtSong(clipMs(cue))}`], uploaded: ['chip info', 'Your own recording'], callout: ['chip info', 'Callouts only'], outdated: ['chip warn', 'Changed — record again'], missing: ['chip', 'Not recorded'] }[stt];
     chip.className = c; chip.textContent = l;
-    count.textContent = `${prepText(ins.text, s.voice.modelId).length} characters`;
+    count.textContent = stt === 'callout' ? '' : `${prepText(ins.text, s.voice.modelId).length} characters`;
   };
   paintState();
   ta.addEventListener('input', () => {
     ins.text = ta.value; paintState(); changed();
     const blk = $('.tl-ins.sel span', el); if (blk) blk.textContent = ins.text || 'New message';
     const only = S.clipState(s, cue, recs[cue]) === 'callout';      // only callouts: nothing to record
-    rec.disabled = !!recording || only; own.disabled = !!recording || only;
+    rec.hidden = only; own.hidden = only;
+    rec.disabled = !!recording; own.disabled = !!recording;
+    hear.disabled = !at || (!recs[cue] && !only);
+    paintChips();
   });
 
   const rec = h('button', { class: 'small primary' }, st === 'missing' ? 'Record' : 'Record again');
-  rec.disabled = !!recording || st === 'callout';
+  rec.disabled = !!recording;
+  rec.hidden = st === 'callout';
   rec.addEventListener('click', () => recordInsert(ins));
   const own = h('button', { class: 'small ghost', title: 'Upload an audio file or record the message yourself' }, 'Use my recording');
-  own.disabled = !!recording || st === 'callout';
+  own.disabled = !!recording;
+  own.hidden = st === 'callout';
   own.addEventListener('click', async () => {
     const r = await chooseRecording({ title: 'Use my recording', text: ins.text });
     if (!r) return;
@@ -380,16 +395,19 @@ function inspector() {
     render();
   });
   const hear = h('button', { class: 'small' }, '▶ Hear it in place');
-  hear.disabled = !recs[cue] || !at;
+  hear.disabled = !at || (!recs[cue] && st !== 'callout');
   hear.addEventListener('click', () => hearInPlace(ins));
   const del = h('button', { class: 'small ghost danger' }, 'Delete');
   del.addEventListener('click', () => {
-    if (!confirm('Delete this message?')) return;
-    s.inserts = s.inserts.filter((x) => x !== ins);
-    db.clips.del(s.id, cue).catch(() => {});
-    delete recs[cue];
-    sel = null; changed(); render();
+    if (!calloutOnly(ins.text) && (ins.text || '').trim() && !confirm('Delete this message?')) return;
+    deleteInsert(ins);
   });
+  const coBtn = cloud.configured && usable().length ? h('button', { class: 'small ghost', title: 'Add a callout to this message', 'aria-haspopup': 'dialog' }, '📣 Callout') : null;
+  if (coBtn) coBtn.addEventListener('click', () => openGallery(coBtn, (p, k) => insertAtCursor(ta, tokenFor(p.slug, k))));
+  const chipsSlot = h('div', {});
+  const paintChips = () => { chipsSlot.innerHTML = ''; const c = tokenChips(ta.value, s.callouts && s.callouts.profile); if (c) chipsSlot.append(c); };
+  trackCursor(ta);
+  paintChips();
 
   const nb = (label, ms) => { const b = h('button', { class: 'small ghost', title: `${ms > 0 ? 'Later' : 'Earlier'} by ${Math.abs(ms / 1000)} s` }, label); b.addEventListener('click', () => nudge(ins, ms)); return b; };
   const where = at ? `${at.phase.label} · in “${at.song.name}” at ${fmtSong(ins.atMs)} of ${fmtSong(at.song.durationMs)}` : 'Not placed: drag it onto a song';
@@ -405,13 +423,14 @@ function inspector() {
   };
 
   box.append(
-    h('div', { class: 'row' }, h('b', {}, 'Message inside a song'), chip, count, h('span', { class: 'spacer' }), del),
+    h('div', { class: 'row' }, h('b', {}, calloutOnly(ins.text) ? '📣 Callout inside a song' : 'Message inside a song'), chip, count, h('span', { class: 'spacer' }), del),
     h('div', { class: 'muted small tl-where' }, where, overlaps ? h('span', { class: 'chip warn', style: { marginLeft: '8px' } }, 'Overlaps a phase message, so it waits until that one ends') : null),
-    ta,
-    h('div', { class: 'row' }, rec, own, hear, h('span', { class: 'spacer' }), h('span', { class: 'muted small' }, 'Move'), nb('−5 s', -5000), nb('−1 s', -1000), nb('+1 s', 1000), nb('+5 s', 5000)),
+    ta, chipsSlot,
+    h('div', { class: 'row' }, rec, own, coBtn, hear, h('span', { class: 'spacer' }), h('span', { class: 'muted small' }, 'Move'), nb('−5 s', -5000), nb('−1 s', -1000), nb('+1 s', 1000), nb('+5 s', 5000)),
     h('div', { class: 'grid2 mt' },
-      slider('Music during the message', 'duck', s.levels.duck, (x) => `${x}% of normal`, 'Lower means the music dips more while the narrator speaks.'),
-      slider('Narrator volume', 'narr', s.levels.narr ?? 100, (x) => `${x}%`, 'How loud this message is.')),
+      calloutOnly(ins.text) ? slider('Music during the callout', 'duck', CALLOUT_MUSIC, (x) => `${x}% of normal`, 'Callouts play over the music; lower means it dips more.')
+        : slider('Music during the message', 'duck', s.levels.duck, (x) => `${x}% of normal`, 'Lower means the music dips more while the narrator speaks.'),
+      slider(calloutOnly(ins.text) ? 'Callout volume' : 'Narrator volume', 'narr', s.levels.narr ?? 100, (x) => `${x}%`, 'How loud this message is.')),
     isV3(s.voice.modelId) ? h('p', { class: 'muted small' }, 'Delivery cues like [softly] or [warmly] work here too.') : null);
   return box;
 }
@@ -419,11 +438,19 @@ function inspector() {
 async function hearInPlace(ins) {
   const cue = S.insertCue(ins);
   const at = layout.songs.find((y) => y.song.uri === ins.uri);
-  if (!at || !recs[cue]) return;
-  const url = URL.createObjectURL(recs[cue].blob);
+  if (!at) return;
+  let blob = recs[cue] && recs[cue].blob;
+  if (!blob && calloutOnly(ins.text)) {           // a callout: hear its first take in the song
+    const { author, key } = parseRef(refsIn(ins.text)[0]);
+    const p = profileBySlug(author) || profileById(s.callouts && s.callouts.profile);
+    const take = p && (p.clips || []).find((c) => c.key === key);
+    if (take) { try { blob = await clipBlob(take); } catch (e) { toast(e.message || String(e)); return; } }
+  }
+  if (!blob) return;
+  const url = URL.createObjectURL(blob);
   await preview.play(at.song, {
     startMs: Math.max(0, ins.atMs - 6000),
-    overlay: { url, atMs: ins.atMs, duck: (ins.duck ?? s.levels.duck) / 100, narr: (ins.narr ?? s.levels.narr ?? 100) / 100, label: (ins.text || 'message').slice(0, 40) },
+    overlay: { url, atMs: ins.atMs, duck: (ins.duck ?? (calloutOnly(ins.text) ? CALLOUT_MUSIC : s.levels.duck)) / 100, narr: (ins.narr ?? s.levels.narr ?? 100) / 100, label: (ins.text || 'message').slice(0, 40) },
   });
 }
 

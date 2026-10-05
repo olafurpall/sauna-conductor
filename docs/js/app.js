@@ -1,7 +1,7 @@
 // App-wide config, view router and a tiny event bus.
-import { store } from './util.js?v=3.1-c91bd7fc';
+import { store } from './util.js?v=3.2-3eb3c514';
 
-export const VERSION = '3.1';
+export const VERSION = '3.2';
 
 // Olafur's Spotify developer app ("Thora sauna conductor"). A Client ID is public, not a secret.
 export const DEFAULT_CLIENT_ID = '346821c157414b1c8d0639c5d0cc9df8';

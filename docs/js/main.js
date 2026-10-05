@@ -1,21 +1,22 @@
 // Boot: settings dialog, status pills, migration from v1, first view.
-import { $, $$, h, toast, uid, sleep, diagnostics, store } from './util.js?v=3.1-c91bd7fc';
-import { app, cfg, saveCfg, legacyCfg, VERSION, DEFAULT_CLIENT_ID } from './app.js?v=3.1-c91bd7fc';
-import * as db from './db.js?v=3.1-c91bd7fc';
-import * as S from './sessions.js?v=3.1-c91bd7fc';
-import { auth, login, logout, adoptLogin, handleRedirect, redirectUri, player, listDevices, parseUri } from './spotify.js?v=3.1-c91bd7fc';
-import { eleven } from './eleven.js?v=3.1-c91bd7fc';
-import { libraryView } from './library.js?v=3.1-c91bd7fc';
-import { editorView } from './editor.js?v=3.1-c91bd7fc';
-import { liveView } from './live.js?v=3.1-c91bd7fc';
-import { sessionView } from './overview.js?v=3.1-c91bd7fc';
-import { timelineView } from './timeline.js?v=3.1-c91bd7fc';
-import { calloutsView } from './calloutadmin.js?v=3.1-c91bd7fc';
-import { preview } from './preview.js?v=3.1-c91bd7fc';
-import { cloud, initCloud, cloudSummary, callFunction } from './cloud.js?v=3.1-c91bd7fc';
-import { initAccount, paintAccount } from './account.js?v=3.1-c91bd7fc';
-import { welcomeView, onboardView, route, holdRoute, onboarded, takeLinkFromUrl, afterSpotifyRedirect } from './gate.js?v=3.1-c91bd7fc';
-import { registerServiceWorker } from './pwa.js?v=3.1-c91bd7fc';
+import { $, $$, h, toast, uid, sleep, diagnostics, store } from './util.js?v=3.2-3eb3c514';
+import { app, cfg, saveCfg, legacyCfg, VERSION, DEFAULT_CLIENT_ID } from './app.js?v=3.2-3eb3c514';
+import * as db from './db.js?v=3.2-3eb3c514';
+import * as S from './sessions.js?v=3.2-3eb3c514';
+import { auth, login, logout, adoptLogin, handleRedirect, redirectUri, player, listDevices, parseUri } from './spotify.js?v=3.2-3eb3c514';
+import { eleven } from './eleven.js?v=3.2-3eb3c514';
+import { libraryView } from './library.js?v=3.2-3eb3c514';
+import { editorView } from './editor.js?v=3.2-3eb3c514';
+import { liveView } from './live.js?v=3.2-3eb3c514';
+import { sessionView } from './overview.js?v=3.2-3eb3c514';
+import { timelineView } from './timeline.js?v=3.2-3eb3c514';
+import { calloutsView } from './calloutadmin.js?v=3.2-3eb3c514';
+import { preview } from './preview.js?v=3.2-3eb3c514';
+import { cloud, initCloud, cloudSummary, callFunction, prefs, savePrefs } from './cloud.js?v=3.2-3eb3c514';
+import { initAccount, paintAccount } from './account.js?v=3.2-3eb3c514';
+import { initInvitations, paintInvites } from './invitations.js?v=3.2-3eb3c514';
+import { welcomeView, onboardView, route, holdRoute, onboarded, takeLinkFromUrl, afterSpotifyRedirect } from './gate.js?v=3.2-3eb3c514';
+import { registerServiceWorker } from './pwa.js?v=3.2-3eb3c514';
 
 registerServiceWorker();
 app.register('welcome', welcomeView);
@@ -68,6 +69,7 @@ dlg.addEventListener('close', () => { renderPills(); app.emit('spotify'); });
 
 function paintSettings() {
   paintAccount();
+  if (cloud.configured) paintInvites();
   $('#cfgClientId').value = cfg.clientId;
   $('#spCustom').hidden = cfg.clientId === DEFAULT_CLIENT_ID || !!cfg.demo;
   $('#redirectUri').textContent = redirectUri();
@@ -86,6 +88,7 @@ function paintSettings() {
   if (cfg.deviceId && ![...sel.options].some((o) => o.value === cfg.deviceId)) sel.append(h('option', { value: cfg.deviceId }, cfg.deviceName || 'Saved device'));
   sel.value = cfg.deviceId || '';
   $('#cfgSpeed').value = String(cfg.speed);
+  paintTalk();
   $('#cfgDemo').checked = !!cfg.demo;
   $('#cfgFallback').checked = !!cfg.fallbackVoice;
 }
@@ -160,6 +163,16 @@ $('#cfgDevice').addEventListener('change', (e) => {
   saveCfg(); renderPills(); app.emit('spotify');
 });
 
+// Talk button: how loud the music stays while the guide talks (yours, on all your devices).
+function paintTalk() {
+  const v = prefs().talkLevel ?? 40;
+  $('#cfgTalk').value = String(v);
+  $('#talkVal').textContent = v + '%';
+}
+$('#cfgTalk').addEventListener('input', (e) => { $('#talkVal').textContent = e.target.value + '%'; });
+$('#cfgTalk').addEventListener('change', (e) => { savePrefs({ talkLevel: +e.target.value }); toast(`While you talk, the music plays at ${e.target.value}%.`, 2200); });
+app.on('prefs', () => { if ($('#settings').open) paintTalk(); });
+
 $('#cfgSpeed').addEventListener('change', (e) => {
   if (liveView.running) { e.target.value = String(cfg.speed); toast('Change the clock speed between sessions.'); return; }
   cfg.speed = +e.target.value; saveCfg();
@@ -183,6 +196,7 @@ $('#btnDiag').addEventListener('click', () => {
 // ---------------------------------------------------------------- cloud sync
 cloud.isRunning = () => liveView.running;
 initAccount({ isRunning: () => liveView.running });
+if (cloud.configured) initInvitations();
 app.on('cloud-data', () => { if (app.current === 'library') libraryView.enter(); });
 app.on('cloud-runs', () => { if (app.current === 'library') libraryView.enter(); });
 // On the hosted site, ElevenLabs is reached through the server function, with the app's key.

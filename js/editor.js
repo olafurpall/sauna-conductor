@@ -7,8 +7,10 @@ import * as S from './sessions.js';
 import { cuePlan, defaultText, LANGS, langOf, hasBuiltInText } from './script.js';
 import { eleven, isV3, clipKey, prepText } from './eleven.js';
 import { chooseRecording, checkUpload } from './recorder.js';
-import { tokenFor, tokensIn, hasTokens } from './tokens.js';
-import { callouts, loadProfiles, profileById, keysOf, labelOf, catalogOf, playKey } from './callouts.js';
+import { tokenFor, refsIn, parseRef, hasTokens, calloutOnly } from './tokens.js';
+import { loadProfiles, profileById, profileBySlug, keysOf, usable, describeRef } from './callouts.js';
+import { openGallery, insertAtCursor, trackCursor, tokenChips, suggestDialog, suggestedCount, removeSuggestions, closeGallery } from './calloutpick.js';
+import { messageMs, recordedMsGuess } from './placement.js';
 import { cloud, roleOf } from './cloud.js';
 import { writeNarration, applyNarration, checkinSlots } from './writer.js';
 import { auth, myPlaylists, parseUri, playlistInfo, sourceTracks, searchTracks } from './spotify.js';
@@ -56,6 +58,7 @@ export const editorView = {
     S.ensureScript(s);
     dirty = !id;
     build();
+    if (cloud.configured) loadProfiles();          // fresh list of callout authors
     if (!id) setTimeout(() => { const n = $('.ed-name', el); if (n) n.focus(); }, 50);
     if (o.section) setTimeout(() => jumpTo(o.section), 60);
   },
@@ -63,6 +66,7 @@ export const editorView = {
     stopAudio();
     preview.stop();
     closeSearch();
+    closeGallery();
     if (busy) { toast('Wait until the recording has finished.'); return false; }
     if (dirty && !confirm('Leave without saving your changes?')) return false;
     closePanel();
@@ -918,10 +922,26 @@ let refreshInserts = () => {};
 function secScript() {
   scriptBox = h('div', {});
   insertBox = h('div', { class: 'ins-box' });
+  const ai = aiBox();
+  // With or without AI narration: without it the guide speaks, and the phase messages aren't used.
+  const on = h('input', { type: 'checkbox', role: 'switch', checked: S.narrationOn(s), 'aria-label': 'AI narration' });
+  const state = h('b', {});
+  const note = h('p', { class: 'help narr-note' });
+  const paintMode = () => {
+    const yes = S.narrationOn(s);
+    state.textContent = yes ? 'With AI narration' : 'Without AI narration';
+    note.textContent = yes
+      ? 'Edit any message. Each one is recorded as its own clip and plays at the moment shown. With Use my recording you can upload an audio file or record a message yourself.'
+      : 'You lead the session yourself: the messages below aren’t recorded or played. The music, the timers, messages inside songs and callouts still work, and 🎙 Talk in the live view dips the music while you speak.';
+    scriptBox.classList.toggle('narr-off', !yes);
+    ai.hidden = !yes || !cloud.configured;
+  };
+  on.addEventListener('change', () => { s.narration = on.checked; touch(); paintMode(); refreshScript(); updateBar(); });
   const sec = h('section', { class: 'ed-sec', id: 'ed-script' },
-    h('h2', {}, 'Narration'),
-    h('p', { class: 'help' }, 'Edit any message. Each one is recorded as its own clip and plays at the moment shown. With Use my recording you can upload an audio file or record a message yourself.'),
-    aiBox(), calloutBox(), scriptBox, insertBox);
+    h('div', { class: 'narr-head' }, h('h2', {}, 'Narration'), h('span', { class: 'spacer' }),
+      h('label', { class: 'switch' }, on, h('span', { class: 'track', 'aria-hidden': 'true' }), state)),
+    note, ai, scriptBox, insertBox);
+  paintMode();
   refreshScript();
   refreshInserts = paintInserts;
   paintInserts();
@@ -929,93 +949,60 @@ function secScript() {
 }
 
 // ---------------------------------------------------------------- callouts
-// A session can pick a callout profile (clips a person recorded) and put its callouts in messages
-// as tokens like {callout-lets-start}, or let them play automatically during the session.
-let lastTa = null;            // the message last edited: callout tokens go in at its cursor
+// Short clips real people recorded. 📣 on any message opens the gallery (grouped by author);
+// "Suggest callouts" places one author's callouts at good moments in the session.
 let coWarn = () => {};
-let coPaint = null;
-app.on('callouts', () => { if (coPaint && app.current === 'editor') coPaint(); });
+app.on('callouts', () => { if (app.current === 'editor' && s) { paintInserts(); refreshCueStates(); } });
 
-function insertToken(key) {
-  const t = lastTa && lastTa.isConnected ? lastTa : null;
-  const tok = tokenFor(key);
-  if (!t) {
-    if (navigator.clipboard) navigator.clipboard.writeText(tok).catch(() => {});
-    toast(`Click into a message first, then press the callout again (or paste ${tok}).`, 4500);
-    return;
+// Callouts the session uses that aren't available (author gone or unpublished, or a callout they don't have).
+function missingCallouts() {
+  const out = new Set();
+  const legacy = profileById(s.callouts && s.callouts.profile);
+  for (const c of S.allCues(s)) {
+    for (const ref of refsIn(S.cueText(s, c.id))) {
+      const { author, key } = parseRef(ref);
+      const p = author ? profileBySlug(author) : legacy;
+      if (!p || !p.published || !keysOf(p).includes(key)) out.add(ref);
+    }
   }
-  const a = t.selectionStart ?? t.value.length, b = t.selectionEnd ?? a;
-  const before = t.value.slice(0, a), after = t.value.slice(b);
-  const pre = before && !/\s$/.test(before) ? ' ' : '';
-  const post = after && !/^\s/.test(after) ? ' ' : '';
-  t.value = before + pre + tok + post + after;
-  const pos = (before + pre + tok).length;
-  t.focus(); t.setSelectionRange(pos, pos);
-  t.dispatchEvent(new Event('input'));
+  return [...out];
 }
 
-function calloutBox() {
-  if (!cloud.configured) { coPaint = null; return h('div', { hidden: true }); }
-  const box = h('div', { class: 'co-box' });
+function calloutBar() {
+  if (!cloud.configured) return null;
+  const authors = usable();
+  const n = suggestedCount(s);
   const warn = h('div', { class: 'co-warn' });
   coWarn = () => {
     warn.innerHTML = '';
-    const co = s.callouts || {};
-    const p = profileById(co.profile);
-    const used = new Set();
-    for (const c of S.allCues(s)) { const t = tokensIn(S.cueText(s, c.id)); [...t.before, ...t.after].forEach((k) => used.add(k)); }
-    if (!used.size) return;
-    if (!p) { warn.append(h('p', { class: 'small warnline' }, 'Some messages have callouts, but no callout voice is chosen above, so they are skipped.')); return; }
-    const have = new Set(keysOf(p));
-    const miss = [...used].filter((k) => !have.has(k));
-    if (miss.length) warn.append(h('p', { class: 'small warnline' }, `${p.name} has no ${miss.map((k) => '“' + labelOf(k) + '”').join(', ')} callout, so ${miss.length > 1 ? 'those are' : 'that one is'} skipped.`));
+    const miss = missingCallouts();
+    if (miss.length) warn.append(h('p', { class: 'small warnline' }, `${miss.length} callout${miss.length > 1 ? 's aren’t' : ' isn’t'} available any more, so ${miss.length > 1 ? 'they are' : 'it is'} skipped: ${miss.map((r) => describeRef(r, profileById(s.callouts && s.callouts.profile))).join(', ')}.`));
   };
-  coPaint = () => {
-    box.innerHTML = '';
-    const co = s.callouts || {};
-    const list = callouts.profiles.filter((p) => (p.clips || []).length && (p.published || cloud.admin));
-    const cur = profileById(co.profile);
-    if (!list.length && !co.profile) {
-      if (!cloud.admin) { box.hidden = true; return; }
-      box.hidden = false;
-      box.append(h('div', { class: 'co-box-head' }, h('b', {}, '📣 Callouts'),
-        h('span', { class: 'muted small' }, ' Short clips a person recorded, like “Let’s do this!”, played next to the narration. No callout profiles are ready yet.'),
-        h('span', { class: 'spacer' }), h('button', { class: 'small', onclick: () => app.show('callouts') }, 'Set up callouts')));
-      return;
-    }
-    box.hidden = false;
-    const sel = h('select', { 'aria-label': 'Callout voice', class: 'co-select' },
-      h('option', { value: '' }, 'No callouts'),
-      ...list.map((p) => h('option', { value: p.id }, p.name + (p.published ? '' : ' (draft, only you)'))),
-      co.profile && !list.some((p) => p.id === co.profile) ? h('option', { value: co.profile }, (cur ? cur.name : 'A removed profile') + ' (no longer available)') : null);
-    sel.value = co.profile || '';
-    sel.addEventListener('change', () => { s.callouts = { ...(s.callouts || {}), profile: sel.value || '' }; touch(); coPaint(); });
-    const auto = h('input', { type: 'checkbox', checked: !!co.auto, disabled: !cur });
-    auto.addEventListener('change', () => { s.callouts = { ...(s.callouts || {}), auto: auto.checked }; touch(); });
-    const head = h('div', { class: 'co-box-head' }, h('b', {}, '📣 Callouts'),
-      h('span', { class: 'muted small' }, ' Short clips a person recorded, played next to the narration.'),
-      cloud.admin ? h('span', { class: 'spacer' }) : null, cloud.admin ? h('button', { class: 'small ghost', onclick: () => app.show('callouts') }, 'Manage') : null);
-    box.append(head, h('div', { class: 'row co-row' }, h('label', { class: 'f' }, h('span', {}, 'Callout voice'), sel),
-      h('label', { class: 'chk' }, auto, 'Add them automatically: when a round starts and ends, mid-round, at 1 minute left, the last song and the end')));
-    if (cur) {
-      const chips = keysOf(cur).map((k) => {
-        const c = catalogOf(k);
-        const ins = h('button', { class: 'small co-chip', title: `Put ${tokenFor(k)} into the message you're editing` }, '+ ' + labelOf(k));
-        ins.addEventListener('mousedown', (e) => e.preventDefault());    // keep the cursor in the message
-        ins.addEventListener('click', () => insertToken(k));
-        const play = h('button', { class: 'small ghost co-play', title: `Hear ${cur.name}: ${labelOf(k)}` }, '▶');
-        play.addEventListener('click', () => playKey(cur, k).catch((e) => toast(e.message || String(e))));
-        return h('span', { class: 'co-tok', title: c ? c.when : '' }, ins, play);
-      });
-      box.append(h('div', { class: 'co-chips' }, ...chips),
-        h('p', { class: 'muted small' }, 'Click in a message, then on a callout to put it there. At the start of a message it plays just before the narrator; anywhere else, right after. A message can also be only callouts.'));
-    }
-    box.append(warn);
+  if (!authors.length && !n) {
     coWarn();
-  };
-  coPaint();
-  loadProfiles().then(() => { if (coPaint) coPaint(); });
-  return box;
+    if (!cloud.admin) return warn;
+    return h('div', { class: 'co-bar' }, h('span', { class: 'muted small' }, '📣 No callouts yet. Invite people to record theirs: '),
+      h('button', { class: 'small ghost', onclick: () => app.openSettings('set-callouts') }, 'Invite someone'), warn);
+  }
+  const sug = h('button', { class: 'small', title: 'Place one author’s callouts at good moments in this session' }, '📣 Suggest callouts');
+  sug.addEventListener('click', () => suggestDialog(s, (r, p) => {
+    touch(); refreshScript(); paintInserts();
+    toast(`Added ${r.tokens + r.inserts} callouts by ${p.name}. Change, move or remove any of them on the timeline.`, 5000);
+  }, (cue) => messageMs(s, cue, recordedMsGuess(recs[cue]))));
+  const rm = n ? h('button', { class: 'small ghost', title: 'Take out the callouts Suggest callouts added' }, `Remove suggested (${n})`) : null;
+  if (rm) rm.addEventListener('click', () => {
+    if (!confirm('Take out the suggested callouts?')) return;
+    const k = removeSuggestions(s);
+    touch(); refreshScript(); paintInserts();
+    toast(`Took out ${k} callout${k === 1 ? '' : 's'}.`);
+  });
+  coWarn();
+  return h('div', { class: 'co-bar' },
+    h('div', { class: 'row' }, sug, rm, h('span', { class: 'muted small co-authors' },
+      authors.length ? 'Callouts by ' + authors.map((p) => `${p.name} (${keysOf(p).length})`).join(', ') + '. Add one to any message with 📣.' : ''),
+      cloud.admin ? h('span', { class: 'spacer' }) : null,
+      cloud.admin ? h('button', { class: 'small ghost', onclick: () => app.show('callouts') }, 'Manage') : null),
+    warn);
 }
 
 // ---------------------------------------------------------------- write the narration with AI
@@ -1084,11 +1071,24 @@ function paintInserts() {
     app.show('timeline', s.id);
   });
   insertBox.append(h('div', { class: 'cue-top ins-head' }, h('b', {}, 'Messages inside songs'),
-    h('span', { class: 'w' }, 'Short messages that play over the music, even in the middle of a song. Place them on the timeline.'),
+    h('span', { class: 'w' }, 'Short messages and callouts that play over the music, even in the middle of a song. Place them on the timeline.'),
     h('span', { class: 'spacer' }), openTl));
-  for (const x of ins) insertBox.append(cueEditor({ id: S.insertCue(x), title: 'Message', when: S.insertWhen(s, x), insert: x }));
+  const bar = calloutBar();
+  if (bar) insertBox.append(bar);
+  for (const x of ins) insertBox.append(calloutOnly(x.text) ? calloutRow(x) : cueEditor({ id: S.insertCue(x), title: 'Message', when: S.insertWhen(s, x), insert: x }));
   $$('textarea', insertBox).forEach(autosize);
   updateBar();
+}
+
+// A callout inside a song, in one line: who says what, where, ▶, change, remove. (Move it on the timeline.)
+function calloutRow(x) {
+  const pills = tokenChips(x.text, s.callouts && s.callouts.profile);
+  const change = h('button', { class: 'small ghost', title: 'Pick another callout', 'aria-haspopup': 'dialog', 'aria-expanded': 'false' }, 'Change');
+  change.addEventListener('click', () => openGallery(change, (p, k) => { x.text = tokenFor(p.slug, k); touch(); paintInserts(); },
+    { hint: 'Pick the callout to play here instead.' }));
+  const rm = h('button', { class: 'small ghost' }, 'Remove');
+  rm.addEventListener('click', () => { s.inserts = s.inserts.filter((y) => y !== x); touch(); paintInserts(); });
+  return h('div', { class: 'co-row-ed', 'data-cue': S.insertCue(x) }, pills, h('span', { class: 'w muted small' }, S.insertWhen(s, x)), h('span', { class: 'spacer' }), change, rm);
 }
 
 function refreshScript() {
@@ -1101,6 +1101,7 @@ function refreshScript() {
 }
 
 const STATE_LABEL = {
+  off: ['chip', 'Not used'],
   ready: ['chip ok', 'Recorded'],
   uploaded: ['chip info', 'Your own recording'],
   callout: ['chip info', 'Callouts only'],
@@ -1117,25 +1118,38 @@ function cueEditor(c) {
   const rec = h('button', { class: 'small' }, 'Record');
   const up = h('button', { class: 'small ghost', title: 'Upload an audio file or record the message yourself' }, 'Use my recording');
   const reset = h('button', { class: 'small ghost' }, ins ? 'Remove' : 'Reset text');
+  const coBtn = cloud.configured ? h('button', { class: 'small ghost co-add', title: 'Add a callout (a short clip a person recorded)', 'aria-haspopup': 'dialog', 'aria-expanded': 'false' }, '📣 Callout') : null;
+  if (coBtn) coBtn.addEventListener('click', () => openGallery(coBtn, (p, k) => insertAtCursor(ta, tokenFor(p.slug, k))));
+  const chips = h('div', { class: 'co-chips-slot' });
+  const paintChips = () => { chips.innerHTML = ''; const x = tokenChips(ta.value, s.callouts && s.callouts.profile); if (x) chips.append(x); };
+  trackCursor(ta);
   const box = h('div', { class: 'cue-ed' + (ins ? ' ins' : ''), 'data-cue': c.id },
     h('div', { class: 'cue-top' }, h('b', {}, c.title), h('span', { class: 'w' }, c.when), chip, count),
-    ta, h('div', { class: 'row' }, play, rec, up, h('span', { class: 'spacer' }), reset));
+    ta, chips, h('div', { class: 'row' }, play, rec, up, coBtn, h('span', { class: 'spacer' }), reset));
+  paintChips();
 
   const paint = () => {
     const st = S.clipState(s, c.id, recs[c.id]);
     const [cls, lab] = busyCues.has(c.id) ? ['chip info', 'Recording…'] : STATE_LABEL[st];
     chip.className = cls; chip.textContent = lab;
-    count.textContent = `${prepText(S.cueText(s, c.id), s.voice.modelId).length} characters`;
-    play.disabled = !recs[c.id] || busyCues.has(c.id) || st === 'callout';
-    rec.disabled = busy || st === 'callout';
-    up.disabled = st === 'callout';
+    count.textContent = st === 'off' ? '' : `${prepText(S.cueText(s, c.id), s.voice.modelId).length} characters`;
+    const off = st === 'off';
+    play.disabled = !recs[c.id] || busyCues.has(c.id) || st === 'callout' || off;
+    rec.disabled = busy || st === 'callout' || off;
+    up.disabled = st === 'callout' || off;
+    reset.disabled = off;
+    ta.disabled = off;
+    box.classList.toggle('off', off);
     rec.textContent = st === 'missing' ? 'Record' : 'Record again';
   };
-  cueEls[c.id] = { paint };
+  cueEls[c.id] = { paint: () => { paint(); paintChips(); } };
   paint();
 
-  ta.addEventListener('input', () => { if (ins) ins.text = ta.value; else s.script[c.id] = ta.value; autosize(ta); touch(); paint(); if (hasTokens(ta.value) || ta.dataset.tok) { ta.dataset.tok = hasTokens(ta.value) ? '1' : ''; coWarn(); } });
-  ta.addEventListener('focus', () => { lastTa = ta; });
+  ta.addEventListener('input', () => {
+    if (ins) ins.text = ta.value; else s.script[c.id] = ta.value;
+    autosize(ta); touch(); paint();
+    if (hasTokens(ta.value) || ta.dataset.tok) { ta.dataset.tok = hasTokens(ta.value) ? '1' : ''; paintChips(); coWarn(); }
+  });
   play.addEventListener('click', () => { if (recs[c.id]) playAudio(recs[c.id].blob, play, true); });
   rec.addEventListener('click', () => recordAndPlay(c.id, null));
   up.addEventListener('click', async () => {

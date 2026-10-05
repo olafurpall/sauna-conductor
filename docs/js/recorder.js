@@ -2,8 +2,8 @@
 // or recorded right here with the microphone.
 // A microphone recording is tidied before it is used: silence trimmed from both ends, the level
 // brought up to match the other messages, and saved as a WAV that every browser can play.
-import { h, toast, pickFile } from './util.js?v=3.1-c91bd7fc';
-import { stripTokens } from './tokens.js?v=3.1-c91bd7fc';
+import { h, toast, pickFile } from './util.js?v=3.2-3eb3c514';
+import { stripTokens } from './tokens.js?v=3.2-3eb3c514';
 
 const AUDIO_EXT = /\.(mp3|m4a|aac|wav|ogg|oga|opus|webm|flac)$/i;
 const MAX_UPLOAD = 20 * 1024 * 1024;
@@ -208,7 +208,8 @@ export function chooseRecording(opts = {}) {
       const mime = pickMime();
       try { rec = mime ? new MediaRecorder(stream, { mimeType: mime }) : new MediaRecorder(stream); } catch { rec = new MediaRecorder(stream); }
       rec.ondataavailable = (e) => { if (e.data && e.data.size) chunks.push(e.data); };
-      rec.onstop = () => review(new Blob(chunks, { type: rec.mimeType || mime || 'audio/webm' }));
+      // Close the microphone before listening back (on iPhone an open microphone makes playback quiet).
+      rec.onstop = () => { const blob = new Blob(chunks, { type: (rec && rec.mimeType) || mime || 'audio/webm' }); stopMic(); review(blob); };
       const t0 = Date.now();
       rec.start(250);
       timer = setInterval(() => {
@@ -231,7 +232,7 @@ export function chooseRecording(opts = {}) {
         if (settled) return;
         body.innerHTML = '';
         const again = h('button', { class: 'primary' }, 'Try again');
-        again.addEventListener('click', ready);
+        again.addEventListener('click', openMic);
         body.append(h('p', {}, e.message || 'That recording could not be used.'), h('div', { class: 'row' }, h('span', { class: 'spacer' }), again));
         return;
       }
@@ -240,7 +241,7 @@ export function chooseRecording(opts = {}) {
       const player = h('audio', { controls: true, src: previewUrl, class: 'rec-audio' });
       const again = h('button', { class: 'small' }, 'Record again');
       const use = h('button', { class: 'primary' }, 'Use this recording');
-      again.addEventListener('click', () => { player.pause(); ready(); });
+      again.addEventListener('click', () => { player.pause(); openMic(); });
       use.addEventListener('click', () => { player.pause(); finish({ blob: result.blob, from: 'mic', durationMs: result.durationMs }); });
       body.innerHTML = '';
       body.append(h('div', { class: 'label' }, `Your recording · ${fmtSec(result.durationMs)}`), player,

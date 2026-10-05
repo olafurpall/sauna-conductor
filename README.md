@@ -7,7 +7,7 @@ Runs a whole sauna session: Spotify playlists, a recorded narrator between round
 - **Live view**: round timer, music that dips under the narrator, song controls (previous / pause / next), and an *Up next* list you can click to jump.
 - **Session page and timeline**: every session at a glance with play counts; preview any song; place extra messages anywhere, even in the middle of a song.
 - **Private by default, easy to share**: everyone has their own sessions. Invite people as collaborators or viewers, or post a link.
-- **Your own voice, and callouts**: upload or record any message yourself, and add short callouts ("Let's do this!", "Last song!") recorded by a guest voice.
+- **Your own voice, and callouts**: upload or record any message yourself, add short callouts ("Let's do this!", "Last song!") recorded by real people, and talk to the group with 🎙 Talk. Or run it without AI narration: just the music and the timers.
 - **An app on your phone**: install it from the browser for a home-screen icon.
 - **Playlists with Claude**: export your Spotify library, send it to Claude, import the playlists Claude builds.
 
@@ -117,6 +117,11 @@ The controls sit right under the ring, so on a phone they're on the first screen
 | Previous / next song | ← / → | Song controls (also on screen) |
 | Pause music | | Pauses only the music |
 | Up next | | Click a song to jump to it |
+| 🎙 Talk / Resume | T | In the middle of the ring while a session runs: the music dips to your Talk level and the narrator fades out |
+
+**🎙 Talk** is for when you want to say something to the group yourself. Press it and the music dips to 40% of its level (change this under Settings → *Talk button*; it follows you to your other devices). If the narrator is speaking, it fades out and that message is left for you to finish. Nothing new is narrated while you talk. Press **Resume** to bring the music back up.
+
+**Without AI narration**: the switch at the top of *Narration* in the session creator. Off, the narration messages are greyed out and nothing is recorded or played for them: you lead the session yourself. The music, the timers, messages inside songs, callouts and Talk all still work.
 
 In song rounds the timer counts down the songs that are left, and skipping past the last song moves on to the cool-down. *Up next* shows the round's remaining songs, then what comes after the round. "+1 song" adds the next unused song to the end of the round. It never goes into Spotify's own queue, so it can't leak into later rounds.
 
@@ -175,15 +180,23 @@ Tick **Short check-ins at the start of each song** to add a message at the start
 
 ## Callouts
 
-Callouts are short clips a person recorded for Sauna Conductor, for example Bubbi or Bríet saying *“Gerum þetta!”*, *“Síðasta lagið!”* or *“Þetta var geggjað!”*. They play next to the ElevenLabs narration.
+Callouts are short clips real people recorded for Sauna Conductor, for example Bubbi or Bríet saying *“Gerum þetta!”*, *“Síðasta lagið!”* or *“Þetta var geggjað!”*. They're grouped by **author** and anyone can use the published ones in any session.
 
-- **In a session**: under **Narration**, choose a **Callout voice**. Click in a message, then on a callout (+ Let's do this, + Last song…) to put its token there, e.g. `{callout-lets-start}`. At the start of a message the callout plays just before the narrator; anywhere else, right after. A message can be only callouts (no recording needed), which works well inside songs on the timeline. ▶ next to each callout plays it.
-- **Add them automatically** plays them at good moments: *Let's do this* after a round's message, *It's getting hot in here* mid-round, *Hang in, we're almost there* late in a long round, *1 minute left*, *Last song* when a round's last song starts, *Round done* before the cool-down message, and *That's a wrap* / *That was amazing* around the last message. Never two within 40 seconds of each other, and never over the narrator.
-- The editor warns if a message uses a callout the chosen voice doesn't have. Callouts are kept in the browser after the first run, so they also play offline.
+- **Add one to any message**: **📣 Callout** on a message opens the gallery, like an emoji picker: a tab per author (*Bubbi · 8 callouts*, *Þóra Hrund · 3 callouts*…), each callout with its words and ▶. Click one and it goes in at the cursor as a token like `{callout:bubbi-morthens/lets-start}`, shown under the message as *📣 Bubbi: “Gerum þetta!” ▶*. At the start of a message it plays just before the narrator; anywhere else, right after. A message can be only callouts.
+- **📣 Suggest callouts** (under *Messages inside songs*, and on the timeline): pick an author and their callouts are placed at good moments as small messages inside the songs: *Let's do this* right after each round's message, *It's getting hot in here* as a song near the middle of the round starts, *Hang in* late in a long round, *Last song*, *1 minute left*, *Round done* (or *That's a wrap* in the final round) just before the round ends, and *That was amazing* after the closing message. Suggesting again, or with another author, replaces the suggested ones; **Remove suggested** takes them out. Callouts you added yourself stay. (Sessions with fixed-length rounds get them at the start and end of the phase messages instead.)
+- **On the timeline** callouts are blue blocks. Drag any message or callout to move it, press **Delete** to remove it, and **📣 Add a callout** at the cursor. Nothing ever plays over anything else: dropped on another message, a callout or message moves to the nearest free spot next to it.
+- **Over the music**: callouts play over the music, which only dips to 90% (a phase message dips it more, for the narrator). Each callout's level can be changed on the timeline.
+- The editor flags any callout that isn't available any more. Callouts are kept in the browser after the first run, so they also play offline.
 
-**Setting up callout profiles (admin)**: account menu → **Callouts**. **New profile**, then name, language and a short description. Each of the eight standard callouts (Let's do this, It's getting hot in here, Hang in we're almost there, 1 minute left, Last song, Round done, That's a wrap, That was amazing) gets one or more takes: **Record or upload** opens the same recorder, showing a suggested line (in Icelandic for Icelandic profiles); a take is picked at random each time. *Another callout* adds one of your own (e.g. `breathe-out`). Tick that the person **agreed** to their recordings being used, and note how, before **Published** can be ticked: only then can everyone choose the profile. Drafts are visible only to the admin, and only the admin can change profiles.
+### Getting callouts recorded (admin)
 
-## Sync, sharing and backups
+**Settings → Callout recordings**: write the person's name (and their email, the language and a short note if you like) and press **Create invitation**. Then **Email** (opens your email app with a message in their language and the link), **Share…** (text message, WhatsApp…) or **Copy link**.
+
+The link opens a page with no sign-in. It greets them by name (filled in, they can change it), explains what this is, shows your note, and lists the lines to record **in their language**, e.g. *Gerum þetta!*, *Síðasta lagið!*, each with when it plays. For each line: **● Record**, **■ Stop**, **▶ Listen**, **↺ Record again**. At the bottom they can add lines of their own. They tick that they agree to their recordings being played in sessions, press **Send**, and their callouts can be used in every session straight away. Opening the link again lets them change or add recordings. The list in Settings shows *Not opened yet*, *Opened the link* or *Sent 8 callouts*; **Turn off link** stops a link working.
+
+The **Callouts** page (account menu) lists every author: listen, re-record or upload takes, change the words, unpublish, or delete. You can also make an author there yourself. An author you unpublish stays unpublished even if they send again.
+
+## Sync, sharing and backups## Sync, sharing and backups
 
 - Signed in, every change is uploaded within seconds and other computers pick it up when they open the page, come back to it, or every two minutes. **Settings → Account → Sync now** does it immediately.
 - Without internet the conductor keeps working from this browser's copy. The header shows **Offline**, and everything syncs when the connection is back.
@@ -216,12 +229,13 @@ Callouts are short clips a person recorded for Sauna Conductor, for example Bubb
 
 - **Hosting**: GitHub Pages from the `docs/` folder of <https://github.com/olafurpall/sauna-conductor>, at `sauna.roadtalk.io` (a CNAME record at IONOS points `sauna` to `olafurpall.github.io`). After changing the app, run `python3 tools/build.py --cname sauna.roadtalk.io` and push. The build adds a version to every file name, and to the service worker, so phones and browsers pick up a new version at once.
 - **Supabase** project *sauna-conductor* (organization Roadtalk). The schema and security rules are in `supabase/schema.sql` (safe to run again). Version 3 (applied 4 October 2026) made spaces private: Þóra keeps all of Ólafur's sessions as a collaborator. It also added share roles, links, access requests and daily limits, and moved the ElevenLabs key into the server-only `app_secrets` table. The app's address and publishable key are in `js/config.js`.
-- **Server functions** (Supabase → Edge Functions), source in `supabase/functions/`. Both are deployed with **Verify JWT off**, because they check the signed-in person themselves:
+- **Server functions** (Supabase → Edge Functions), source in `supabase/functions/`. All three are deployed with **Verify JWT off** (`eleven` and `write` check the signed-in person themselves; `collect` is for people without an account):
   - `eleven`: all ElevenLabs calls, with the key from `app_secrets` (or the `ELEVENLABS_API_KEY` secret). Each person can record **25,000 characters a day** (`TTS_DAILY_CHARS`) and add 10 library voices a day (`VOICE_ADDS_DAILY`); the admin has no limit. Voices you made or cloned in your own ElevenLabs account are only for you; others can use library and stock voices.
   - `write`: the AI writer (Claude), with the **`ANTHROPIC_API_KEY`** secret (Supabase → Edge Functions → Secrets). 20 writes per person per day (`AI_DAILY_CALLS`); model `claude-opus-5-5` (`WRITER_MODEL`).
+  - `collect`: the public callout recording page (`record.html?i=<token>`). The invitation's long random token is the only key: it can read that invitation, upload recordings to that author (audio checked by its first bytes, 3 MB at most, 40 lines at most) and send them, which publishes the author with their agreement noted.
   - Usage per person and day is in the `usage_daily` table.
 - **Admin**: the first person who set up the app (Ólafur, in `app_admins`). The admin sees ElevenLabs credits in the header, **Spotify access requests** (header: *1 waiting for Spotify*; Settings → *Spotify access*) and the **Callouts** page (account menu).
-- **Callouts** (version 3.1): tables `callout_profiles` and `callout_clips`, audio in the private `callouts` storage bucket (`<profile id>/<clip id>.wav`). Everyone signed in can read published profiles; only the admin can write. Added to `supabase/schema.sql`; run it again to add them.
+- **Callouts** (versions 3.1 and 3.2): tables `callout_profiles` (with a unique short name, `slug`), `callout_clips`, `callout_notes` (how each person agreed; admin only) and `callout_invites` (admin only), audio in the private `callouts` storage bucket (`<profile id>/<clip id>.wav`). Everyone signed in can read published authors; only the admin (and the `collect` function, for invitations) can write.
 - **Letting someone into Spotify**: <https://developer.spotify.com/dashboard> → *Thora sauna conductor* → **User Management** → add their name and the **Spotify email** from the request (5 people at most), then press **Mark as added** in Settings. They see it and press Try again. If someone is turned away anyway, the email on the list doesn't match their Spotify login. Opening the app to everyone needs Spotify's *extended quota*, which Spotify now gives only to registered businesses with 250,000 monthly users.
 - **Google sign-in**: Google Cloud project *Sauna Conductor* (account olafurpall@gmail.com, separate from TARS) → Google Auth Platform: app *Sauna Conductor*, External, **In production**, web client *Web client 1* with redirect URI `https://cldzrjlznhyswfzylxsl.supabase.co/auth/v1/callback`. Its Client ID and secret are in Supabase → Authentication → Sign In / Providers → Google.
 - **Email sign-in**: Supabase's built-in email only reaches members of the Supabase organization, a few per hour, so others are told to use Google. To open email sign-in to everyone, add an email sender under Supabase → Authentication → Emails → SMTP (e.g. Resend).

@@ -137,6 +137,7 @@
           <div class="theme" id="theme"></div>
           <div class="timer" id="timer">15:00</div>
           <div class="sub" id="sub">Press Start when everyone is seated</div>
+          <button class="talk" id="btnTalk" hidden>🎙 Talk</button>
           <div class="ring-cta">
             <button class="primary" id="btnResume" hidden>Resume</button>
             <button class="primary" id="btnStart">Start session</button>
@@ -152,7 +153,7 @@
       </div>
       <div class="timeline" id="timeline"></div>
       <div class="seg-labels" id="segLabels"></div>
-      <div class="hint"><kbd>Space</kbd> pause · <kbd>N</kbd> next phase · <kbd>→</kbd> next song · <kbd>+</kbd> add a minute · <kbd>R</kbd> replay narration</div>
+      <div class="hint"><kbd>Space</kbd> pause · <kbd>N</kbd> next phase · <kbd>→</kbd> next song · <kbd>+</kbd> add a minute · <kbd>R</kbd> replay narration · <kbd>T</kbd> talk</div>
     </section>
 
     <aside class="side">
@@ -223,6 +224,19 @@
       <ul class="people" id="accessList"></ul>
     </section>
 
+    <section class="set-sec" id="set-callouts" hidden>
+      <h3>Callout recordings</h3>
+      <p class="help">Invite people to record callouts: short lines like “Gerum þetta!” or “Síðasta lagið!” in their own voice. They get a private link to a page where they record each line on their phone or computer, with no account. When they press Send, their callouts can be added to any session. <a href="#" id="lnkCallouts">Callouts page</a></p>
+      <div class="inv-form">
+        <label class="f"><span>Their name</span><input type="text" id="invName" maxlength="80" placeholder="e.g. Bubbi Morthens" autocomplete="off"></label>
+        <label class="f"><span>Email (optional)</span><input type="email" id="invEmail" placeholder="for the email to them" autocomplete="off"></label>
+        <label class="f"><span>Language</span><select id="invLang"><option value="is">Íslenska</option><option value="en">English</option></select></label>
+        <label class="f wide"><span>A note at the top of their page (optional)</span><textarea id="invNote" rows="2" maxlength="600" placeholder="e.g. Hæ Bubbi! Takk fyrir að vera með, þetta verður geggjað."></textarea></label>
+        <div class="row wide"><span class="spacer"></span><button class="primary small" id="btnInvite">Create invitation</button></div>
+      </div>
+      <ul class="people" id="inviteList"></ul>
+    </section>
+
     <section class="set-sec" id="set-spotify">
       <h3>Spotify</h3>
       <p class="help">Press <b>Connect Spotify</b> and log in with your own Spotify account (Premium). There's nothing else to set up: Sauna Conductor already has its Spotify app. While Sauna Conductor is in beta, Spotify only lets in the people on its guest list: if Spotify turns you away, you'll be asked for the email you use for Spotify so you can be added. Your Spotify login is saved in your account, so your other devices connect by themselves.</p>
@@ -266,6 +280,12 @@
         <button class="small" id="btnDevices">Refresh</button>
         <span class="muted small">Open the Spotify app first so it shows up here.</span>
       </div>
+    </section>
+
+    <section class="set-sec" id="set-talk">
+      <h3>Talk button</h3>
+      <p class="help">While a session runs, <b>🎙 Talk</b> in the middle of the ring lets you speak to the group: the music dips, and if the narrator is speaking it fades out (you finish the message yourself). Press <b>Resume</b> to bring the music back up. Key: <kbd>T</kbd>.</p>
+      <label class="f talk-level"><span>Music while you talk <b id="talkVal">40%</b> of its normal level</span><input type="range" id="cfgTalk" min="0" max="100" step="5" value="40"></label>
     </section>
 
     <section class="set-sec" id="set-other">

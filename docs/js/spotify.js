@@ -1,6 +1,6 @@
 // Spotify: login (Authorization Code + PKCE), Web API, playback and library tools.
-import { store, sleep, clamp, log, toast } from './util.js?v=3.1-c91bd7fc';
-import { cfg, app } from './app.js?v=3.1-c91bd7fc';
+import { store, sleep, clamp, log, toast } from './util.js?v=3.2-3eb3c514';
+import { cfg, app } from './app.js?v=3.2-3eb3c514';
 
 export const SCOPES = [
   'streaming', 'user-read-email', 'user-read-private',

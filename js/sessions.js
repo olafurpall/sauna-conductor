@@ -166,9 +166,15 @@ export function ensureScript(s) {
   return s;
 }
 
-// 'missing' | 'ready' | 'outdated' | 'uploaded' | 'callout' (only callouts: nothing to record)
-export const clipOkState = (st) => st === 'ready' || st === 'uploaded' || st === 'callout';
+// "Without AI narration": the guide speaks; the phase messages aren't recorded or played
+// (their callouts still play, and so do messages inside songs).
+export const narrationOn = (s) => s.narration !== false;
+export const isPhaseCue = (cueId) => !String(cueId).startsWith('x-');
+
+// 'missing' | 'ready' | 'outdated' | 'uploaded' | 'callout' (only callouts: nothing to record) | 'off' (narration off)
+export const clipOkState = (st) => st === 'ready' || st === 'uploaded' || st === 'callout' || st === 'off';
 export function clipState(s, cueId, rec) {
+  if (!narrationOn(s) && isPhaseCue(cueId)) return 'off';
   if (calloutOnly(cueText(s, cueId))) return 'callout';
   if (!rec || !rec.blob) return 'missing';
   if (rec.source === 'uploaded') return 'uploaded';

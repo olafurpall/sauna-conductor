@@ -1,9 +1,9 @@
 // Session model: everything needed to replay a sauna session exactly.
-import { uid, blobToBase64, base64ToBlob, fmtSong, store } from './util.js?v=3.1-c91bd7fc';
-import { cuePlan, defaultScript, defaultText } from './script.js?v=3.1-c91bd7fc';
-import { clipKey } from './eleven.js?v=3.1-c91bd7fc';
-import { calloutOnly } from './tokens.js?v=3.1-c91bd7fc';
-import * as db from './db.js?v=3.1-c91bd7fc';
+import { uid, blobToBase64, base64ToBlob, fmtSong, store } from './util.js?v=3.2-3eb3c514';
+import { cuePlan, defaultScript, defaultText } from './script.js?v=3.2-3eb3c514';
+import { clipKey } from './eleven.js?v=3.2-3eb3c514';
+import { calloutOnly } from './tokens.js?v=3.2-3eb3c514';
+import * as db from './db.js?v=3.2-3eb3c514';
 
 export const DEFAULT_VOICE = {
   id: 'xuiKYsOhCzCAyIdb1aX3', name: 'Clint Brooks',
@@ -166,9 +166,15 @@ export function ensureScript(s) {
   return s;
 }
 
-// 'missing' | 'ready' | 'outdated' | 'uploaded' | 'callout' (only callouts: nothing to record)
-export const clipOkState = (st) => st === 'ready' || st === 'uploaded' || st === 'callout';
+// "Without AI narration": the guide speaks; the phase messages aren't recorded or played
+// (their callouts still play, and so do messages inside songs).
+export const narrationOn = (s) => s.narration !== false;
+export const isPhaseCue = (cueId) => !String(cueId).startsWith('x-');
+
+// 'missing' | 'ready' | 'outdated' | 'uploaded' | 'callout' (only callouts: nothing to record) | 'off' (narration off)
+export const clipOkState = (st) => st === 'ready' || st === 'uploaded' || st === 'callout' || st === 'off';
 export function clipState(s, cueId, rec) {
+  if (!narrationOn(s) && isPhaseCue(cueId)) return 'off';
   if (calloutOnly(cueText(s, cueId))) return 'callout';
   if (!rec || !rec.blob) return 'missing';
   if (rec.source === 'uploaded') return 'uploaded';

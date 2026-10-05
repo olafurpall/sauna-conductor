@@ -144,7 +144,7 @@ export async function signOut() {
   await syncing;
   try { await cloud.sb.auth.signOut(); } catch (e) { log('cloud-signout', errText(e)); }
   await forgetLocalCopies();
-  for (const k of ['tok', 'tokAt', 'shared', 'outShares', 'plays', 'playsSent', 'runs', 'run', 'tomb', 'ws', 'wsKnown', 'onboarded', 'pendingLink', 'elkey', 'elkeyAt']) store.del(k);
+  for (const k of ['prefs', 'tok', 'tokAt', 'shared', 'outShares', 'plays', 'playsSent', 'runs', 'run', 'tomb', 'ws', 'wsKnown', 'onboarded', 'pendingLink', 'elkey', 'elkeyAt']) store.del(k);
   signedOut();
 }
 
@@ -252,6 +252,23 @@ async function saveUserSettings(patch) {
   check(await cloud.sb.from('user_settings').upsert({ user_id: cloud.user.id, data, updated_at: new Date().toISOString() }));
 }
 
+// ---------------------------------------------------------------- your own preferences (e.g. the Talk volume)
+// Kept on this device and in your account, so they follow you to your other devices.
+export const prefs = () => store.get('prefs', {});
+export function savePrefs(patch) {
+  const p = { ...prefs(), ...patch, at: Date.now() };
+  store.set('prefs', p);
+  app.emit('prefs', p);
+  if (cloud.user && cloud.sb) saveUserSettings({ prefs: p }).catch((e) => log('cloud-prefs', errText(e)));
+  return p;
+}
+async function syncPrefs() {
+  const remote = (await userSettings()).prefs || null;
+  const local = store.get('prefs', null);
+  if (remote && (!local || (remote.at || 0) > (local.at || 0))) { store.set('prefs', remote); app.emit('prefs', remote); }
+  else if (local && (!remote || (local.at || 0) > (remote.at || 0))) await saveUserSettings({ prefs: local });
+}
+
 async function syncSpotify() {
   const sp = (await userSettings()).spotify || null;
   const tok = store.get('tok', null);
@@ -300,6 +317,7 @@ async function fullSync() {
   try {
     await loadWorkspace();
     await syncSpotify();
+    await syncPrefs().catch((e) => log('cloud-prefs', errText(e)));
 
     // Sessions deleted here while offline.
     const tomb = store.get('tomb', {});

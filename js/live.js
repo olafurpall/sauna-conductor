@@ -5,9 +5,10 @@ import * as db from './db.js';
 import * as S from './sessions.js';
 import { cueForRound } from './script.js';
 import { player, auth } from './spotify.js';
+import { prefs } from './cloud.js';
 import { preview } from './preview.js';
-import { stripTokens, tokensIn, calloutOnly } from './tokens.js';
-import { callouts, prepare as prepareCalloutClips, pick as pickCallout, labelOf as calloutLabel } from './callouts.js';
+import { stripTokens, tokensIn, refsIn, calloutOnly } from './tokens.js';
+import { callouts, prepareRefs as prepareCalloutRefs, pick as pickCallout, labelOf as calloutLabel, CALLOUT_MUSIC } from './callouts.js';
 
 const el = $('#view-live');
 let sess = null;          // loaded session
@@ -45,7 +46,7 @@ async function load(id) {
   for (const c of r.list) {
     cueMeta[c.id] = c;
     const rec = r.recs[c.id];
-    if (c.state === 'callout') clipOk[c.id] = true;            // only callouts: nothing recorded to play
+    if (c.state === 'callout' || c.state === 'off') clipOk[c.id] = true;   // nothing recorded to play
     else if (rec && rec.blob) { clipUrls[c.id] = URL.createObjectURL(rec.blob); clipOk[c.id] = S.clipOkState(c.state); }
   }
   sess = s;
@@ -56,89 +57,86 @@ async function load(id) {
 }
 
 // ---------------------------------------------------------------- callouts
-// Clips a person recorded ("Let's do this!"), from the session's callout profile. Tokens in a message
-// play just before it (at its start) or right after it; with "automatically", the session also plays
-// them when a round starts and ends, mid-round, at one minute left, at the last song and at the end.
-const co = { prep: null, ready: null, lastAt: 0, busy: false, get auto() { return !!(this.prep && sess && sess.callouts && sess.callouts.auto); } };
+// Clips real people recorded ("Let's do this!"), from any author. Tokens in a message play just before
+// it (at its start) or right after it. A message can be only callouts (a callout inside a song).
+const co = { prep: null, ready: null, said: '' };
 async function prepareCallouts(s) {
   if (co.prep) Object.values(co.prep.urls).flat().forEach((x) => URL.revokeObjectURL(x.url));
   co.prep = null;
-  const pid = s.callouts && s.callouts.profile;
-  if (!pid || !callouts.available) return;
+  const refs = S.allCues(s).flatMap((c) => refsIn(S.cueText(s, c.id)));
+  if (!refs.length || !callouts.available) return;
   let prep;
-  try { prep = await prepareCalloutClips(pid); } catch (e) { log('callouts-error', e.message || String(e)); return; }
-  if (sess !== s) return;
-  if (!prep.profile) { toast('The callouts for this session are no longer available.', 5000); return; }
+  try { prep = await prepareCalloutRefs(refs, s.callouts && s.callouts.profile); } catch (e) { log('callouts-error', e.message || String(e)); return; }
+  if (sess !== s) { Object.values(prep.urls).flat().forEach((x) => URL.revokeObjectURL(x.url)); return; }
   co.prep = prep;
-  if (prep.missing) toast(`${prep.missing} callout${prep.missing > 1 ? 's' : ''} could not be loaded (offline?). The rest will play.`, 5000);
-  log('callouts-ready', prep.profile.name, Object.keys(prep.urls).length);
+  if (prep.missing) toast(`${prep.missing} callout${prep.missing > 1 ? 's' : ''} could not be loaded (offline, or no longer available). The rest will play.`, 5000);
+  log('callouts-ready', Object.keys(prep.names).join(','), Object.keys(prep.urls).length);
 }
-const hasCallout = (k) => !!(co.prep && co.prep.urls[k] && co.prep.urls[k].length);
 
-// Explicit tokens in a message, plus the automatic ones for the phase it belongs to.
-function calloutsFor(text, ph) {
+function calloutsFor(text) {
   const t = tokensIn(text);
-  if (co.auto && ph) {
-    if (ph.type === 'round') t.after.push('lets-start');
-    else if (ph.type === 'break') t.before.unshift('done');
-    else if (ph.type === 'closing') { t.before.unshift('final-done'); t.after.push('amazing'); }
-  }
-  const seen = new Set();
-  const once = (a) => a.filter((k) => !seen.has(k) && seen.add(k));
-  return { before: once(t.before), after: once(t.after) };
+  return { before: t.before, after: t.after };
 }
 
-async function playCallout(key, tok) {
-  const take = pickCallout(co.prep, key);
-  if (!take) { log('callout-missing', key); return 'none'; }
+async function playCallout(ref, tok, volume) {
+  const take = pickCallout(co.prep, ref);
+  if (!take) { log('callout-missing', ref); return 'none'; }
   await waitWhilePaused(tok);
   if (tok !== engine.token) return 'stopped';
-  narr.active = 'co:' + key; renderNarr();
-  const r = await playUrl(take.url);
-  if (tok === engine.token && narr.active === 'co:' + key) { narr.active = null; renderNarr(); }
-  co.lastAt = now();
-  log('callout', key, r);
+  const id = 'co:' + ref;
+  co.said = `${take.name || 'Callout'}: “${take.clip.said || calloutLabel(take.key)}”`;
+  narr.active = id; renderNarr();
+  const r = await playUrl(take.url, volume);
+  if (tok === engine.token && narr.active === id) { narr.active = null; renderNarr(); }
+  log('callout', `${take.author}/${take.key}`, r);
   return r;
 }
 
-// Callouts during a round, over the music.
-function autoCallouts(p) {
-  if (!co.auto || co.busy || p.type !== 'round' || !p.musicOn || narr.active || insertBusy || narr.owner === 'replay') return;
-  const dur = p.durMs + engine.extraMs;
-  const el = elapsedMs(), rem = remainingMs();
-  if (!dur || rem == null) return;
-  const a = (p.auto = p.auto || {});
-  const due = [];
-  if (!a.last && p.tracks && p.tracks.length > 1 && setIndex(p) === p.tracks.length - 1 && el > 60000) {
-    a.last = true;
-    if (hasCallout('last-song') && player.position() < 20000) due.push('last-song');
-  }
-  if (!a.min && rem <= 62000) { a.min = true; if (rem > 35000 && dur >= 4 * 60000 && hasCallout('one-minute-left')) due.push('one-minute-left'); }
-  if (!a.hot && el >= dur * 0.45) { a.hot = true; if (dur >= 6 * 60000 && rem > 120000 && hasCallout('getting-hot')) due.push('getting-hot'); }
-  if (!a.almost && el >= dur * 0.75) { a.almost = true; if (dur >= 8 * 60000 && rem > 100000 && hasCallout('almost-there')) due.push('almost-there'); }
-  if (!due.length || (now() - co.lastAt) * speed() < 40000) return;      // never two close together
-  calloutOverMusic(p, due[0]);
+// ---------------------------------------------------------------- Talk (push to talk)
+// The guide presses Talk to say something: the music dips to their Talk level (Settings, 40% by
+// default) and any narration that is playing fades out and is left unfinished (the guide says it).
+// While talking, no narration, messages or callouts start. Resume brings the music back up.
+const talk = { on: false, mul: 1, timer: 0 };
+const talkLevel = () => clamp((prefs().talkLevel ?? 40) / 100, 0, 1);
+function talkTo(target, ms) {
+  clearInterval(talk.timer);
+  const from = talk.mul, steps = Math.max(1, Math.round(ms / 50));
+  let i = 0;
+  talk.timer = setInterval(() => {
+    i++;
+    talk.mul = i >= steps ? target : from + (target - from) * (i / steps);
+    music.apply();
+    if (i >= steps) clearInterval(talk.timer);
+  }, ms / steps);
 }
-// After a resume, moments already past don't play.
-function markPassed(p) {
-  if (p.type !== 'round') return;
-  const dur = p.durMs + engine.extraMs, el = elapsedMs(), rem = remainingMs();
-  const lastNow = !!(p.tracks && p.tracks.length > 1 && setIndex(p) === p.tracks.length - 1);
-  p.auto = { last: lastNow, min: rem != null && rem <= 62000, hot: el >= dur * 0.45, almost: el >= dur * 0.75 };
+function fadeOutNarration(ms = 1200) {
+  if (!narr.stop && !narr.active) return;
+  narr.seq++;                                   // the rest of this message (its callouts) won't play
+  const mine = narr.seq;
+  const a = narr.audio, v0 = a.volume, steps = 16;
+  if (!narr.tts && v0 > 0.02) a.volume = v0 * 0.97;
+  // The browser voice can't fade, and on iPhone a page can't change the volume: stop it at once.
+  if (narr.tts || (v0 > 0.02 && Math.abs(a.volume - v0) < 0.001)) { stopNarration(); return; }
+  let i = 0;
+  clearInterval(narr.fade);
+  narr.fade = setInterval(() => {
+    if (narr.seq !== mine) { clearInterval(narr.fade); return; }     // something else took over
+    i++;
+    a.volume = clamp(v0 * (1 - i / steps), 0, 1);
+    if (i >= steps) { clearInterval(narr.fade); stopNarration(); }
+  }, ms / steps);
 }
-
-async function calloutOverMusic(p, key) {
-  const tok = engine.token;
-  co.busy = true;
-  const target = (p.type === 'round' ? sess.levels.heat : sess.levels.cool) / 100;
-  try {
-    const seq = narr.seq;
-    await music.fadeTo(target * sess.levels.duck / 100, 800, tok);
-    if (tok === engine.token && seq === narr.seq && narr.owner !== 'replay' && !narr.active) await playCallout(key, tok);
-    await waitWhilePaused(tok);
-    if (tok === engine.token && narr.owner !== 'replay' && !narr.active && !insertBusy) await music.fadeTo(target, 1500, tok);
-  } finally { co.busy = false; }
+function toggleTalk(force) {
+  if (!engine.running && !talk.on) return;
+  const on = force === undefined ? !talk.on : !!force;
+  if (on === talk.on) return;
+  talk.on = on;
+  log('talk', on ? 'on' : 'off', Math.round(talkLevel() * 100));
+  if (on) { fadeOutNarration(); talkTo(talkLevel(), 900); }
+  else talkTo(1, 1500);
+  render();
 }
+app.on('prefs', () => { if (talk.on) talkTo(talkLevel(), 400); });
 
 // ---------------------------------------------------------------- music level
 // Volume = phase level × song-transition multiplier.
@@ -146,7 +144,7 @@ const music = {
   level: 0, trans: 1, demoCtx: null,
   get live() { return !cfg.demo && player.ready; },
   apply() {
-    const v = clamp(this.level * this.trans, 0, 1);
+    const v = clamp(this.level * this.trans * talk.mul, 0, 1);
     if (this.live) player.setVolume(v);
     renderMeter(v);
   },
@@ -315,17 +313,19 @@ app.on('queue', () => renderQueue());
 // ---------------------------------------------------------------- narration
 // seq changes whenever the narration is stopped, so a message made of several parts (callouts and
 // the recording) knows not to carry on with its next part.
-const narr = { audio: new Audio(), active: null, stop: null, paused: false, tts: false, seq: 0 };
+const narr = { audio: new Audio(), active: null, stop: null, paused: false, tts: false, seq: 0, fade: 0 };
 narr.audio.preload = 'auto';
 
 function stopNarration() {
   narr.seq++;
+  clearInterval(narr.fade);
   if (narr.stop) narr.stop();
   narr.stop = null; narr.active = null; narr.paused = false;
   renderNarr();
 }
 
 function playUrl(url, volume) {
+  clearInterval(narr.fade);            // a fade-out (Talk) never reaches a new clip
   if (narr.stop) narr.stop();          // never leave an earlier clip's promise waiting
   return new Promise((resolve) => {
     const a = narr.audio;
@@ -389,16 +389,19 @@ async function waitWhilePaused(tok) { while (engine.paused && tok === engine.tok
 async function narrate(id, tok, ph) {
   await waitWhilePaused(tok);
   if (tok !== engine.token) return 'stopped';
+  if (talk.on) { log('narration-skipped-talk', id); return 'talk'; }      // the guide is talking
   const text = S.cueText(sess, id);
   const extra = calloutsFor(text, ph);
   const seq = narr.seq;
   const live = () => tok === engine.token && seq === narr.seq;
   for (const k of extra.before) { await playCallout(k, tok); if (!live()) return 'stopped'; }
-  narr.active = id; renderNarr();
   let result = 'none';
-  if (clipUrls[id]) result = await playUrl(clipUrls[id]);
-  if ((result === 'none' || result === 'error') && cfg.fallbackVoice && live() && !calloutOnly(text)) result = await speak(text);
-  if (tok === engine.token && narr.active === id) { narr.active = null; renderNarr(); }
+  if (S.narrationOn(sess) || !S.isPhaseCue(id)) {                    // without AI narration the guide speaks
+    narr.active = id; renderNarr();
+    if (clipUrls[id]) result = await playUrl(clipUrls[id]);
+    if ((result === 'none' || result === 'error') && cfg.fallbackVoice && live() && !calloutOnly(text)) result = await speak(text);
+    if (tok === engine.token && narr.active === id) { narr.active = null; renderNarr(); }
+  } else result = 'off';
   for (const k of extra.after) { if (!live()) break; await playCallout(k, tok); }
   log('narrated', id, result);
   return result;
@@ -565,7 +568,11 @@ async function enterPhase(i, resumeRun) {
     const isRound = p.type === 'round';
     const target = (isRound ? sess.levels.heat : sess.levels.cool) / 100;
     const duck = target * sess.levels.duck / 100;
-    const startLevel = resumeRun ? 0.02 : duck;
+    // The music starts under the narrator. Callouts on their own only dip it a little, and with
+    // nothing to say it starts at its full level.
+    const phaseText = S.cueText(sess, p.cue);
+    const narrated = S.narrationOn(sess) && !calloutOnly(phaseText);
+    const startLevel = resumeRun ? 0.02 : narrated ? duck : refsIn(phaseText).length ? target * CALLOUT_MUSIC / 100 : target;
     // The music change runs in the background: the old music fades out, the new music fades in
     // under the narrator. The narration starts straight away, at full volume.
     const musicJob = (async () => {
@@ -586,7 +593,6 @@ async function enterPhase(i, resumeRun) {
       renderQueue();
     })();
     if (resumeRun) {
-      markPassed(p);
       await musicJob;
       if (tok !== engine.token) return;
       toast(`Resumed: ${phaseName(p)}.`, 3500);
@@ -634,6 +640,7 @@ function extend() {
 async function replay() {
   const p = phase();
   if (!engine.running || !p) return;
+  if (talk.on) toggleTalk(false);
   if (!p.musicOn) { toast('One moment, the music for this phase is still starting.'); return; }
   const tok = engine.token;
   const rtok = ++engine.replayTok;
@@ -658,6 +665,7 @@ async function stopSession() {
   await music.fadeTo(0, 2500, tok);
   if (music.live) await player.pause();
   engine.running = false; engine.idx = -1; engine.holding = false;
+  talk.on = false; clearInterval(talk.timer); talk.mul = 1;
   releaseWakeLock();
   render(); renderQueue(); renderResume();
 }
@@ -753,7 +761,7 @@ function tick() {
       } else { advance(); return; }
     }
   }
-  if (p && !engine.paused) { checkInserts(p); autoCallouts(p); }
+  if (p && !engine.paused) checkInserts(p);
   songTransitions();
   if (app.current === 'live') { render(); renderSong(); }
 }
@@ -773,7 +781,7 @@ function checkInserts(p) {
     if (ins.done) { if (!insertBusy && pos < ins.atMs - 3000) ins.done = false; continue; }   // went back before it: play it again
     if (pos < ins.atMs) continue;
     if (pos > ins.atMs + 20000) { ins.done = true; log('insert-skipped', ins.id); continue; }   // skipped past it
-    if (narr.active || insertBusy || co.busy) return;                                            // let the narrator finish first
+    if (narr.active || insertBusy || talk.on) return;                                            // let the narrator (or the guide) finish first
     ins.done = true;
     playInsert(p, ins);
     return;
@@ -790,14 +798,14 @@ async function playInsert(p, ins) {
   const seq = narr.seq;                 // a Replay or stop while the music dips cancels this message
   insertBusy = true;
   const target = (p.type === 'round' ? sess.levels.heat : sess.levels.cool) / 100;
-  const duck = (ins.duck ?? sess.levels.duck) / 100;
+  const duck = (ins.duck ?? (calloutOnly(text) ? CALLOUT_MUSIC : sess.levels.duck)) / 100;   // callouts: the music only dips a little
   const vol = (ins.narr ?? sess.levels.narr ?? 100) / 100;
   log('insert', id, Math.round(player.position() / 1000));
   try {
     await music.fadeTo(target * duck, 1200, tok);
     if (tok === engine.token) {
       const live = () => tok === engine.token && seq === narr.seq;
-      for (const k of extra.before) { if (!live()) break; await playCallout(k, tok); }
+      for (const k of extra.before) { if (!live()) break; await playCallout(k, tok, vol); }
       let r = 'none';
       if (speech && live()) {
         narr.active = id; renderNarr();
@@ -805,7 +813,7 @@ async function playInsert(p, ins) {
         if ((r === 'none' || r === 'error') && cfg.fallbackVoice && live() && !calloutOnly(text)) r = await speak(text);
         if (tok === engine.token && narr.active === id) { narr.active = null; renderNarr(); }
       }
-      for (const k of extra.after) { if (!live()) break; await playCallout(k, tok); }
+      for (const k of extra.after) { if (!live()) break; await playCallout(k, tok, vol); }
       log('insert-done', id, r);
     }
     await waitWhilePaused(tok);
@@ -861,6 +869,13 @@ function render() {
   const p = engine.running ? phase() : null;
   body.classList.toggle('phase-idle', !p);
   $('.ring-center').classList.toggle('idle', !engine.running && !!sess);
+  $('.ring-center').classList.toggle('running', engine.running);
+  const tb = $('#btnTalk');
+  tb.hidden = !engine.running;
+  tb.classList.toggle('on', talk.on);
+  tb.textContent = talk.on ? '▶ Resume' : '🎙 Talk';
+  tb.title = talk.on ? 'Bring the music back up (T)' : `Say something: the music dips to ${Math.round(talkLevel() * 100)}% and the narrator stops (T)`;
+  body.classList.toggle('talking', talk.on);
   body.classList.toggle('phase-heat', !!p && p.type === 'round');
   body.classList.toggle('phase-cool', !!p && p.type === 'break');
   body.classList.toggle('phase-done', !!p && p.type === 'closing');
@@ -888,13 +903,13 @@ function render() {
     theme.textContent = p.theme || '';
     if (p.durMs == null) {
       $('#timer').textContent = fmt(sessionElapsed());
-      $('#sub').textContent = 'Total session time';
+      $('#sub').textContent = talk.on ? `You're talking · music at ${Math.round(talkLevel() * 100)}%` : 'Total session time';
       prog.style.strokeDashoffset = 0;
     } else {
       const rem = remainingMs(), dur = p.durMs + engine.extraMs;
       $('#timer').textContent = fmt(rem);
       prog.style.strokeDashoffset = RING_C * clamp(rem / dur, 0, 1);
-      $('#sub').textContent = engine.holding ? `Waiting. Press “Start round ${p.n + 1}”` : next ? `Next: ${phaseName(next)}` : '';
+      $('#sub').textContent = talk.on ? `You're talking · music at ${Math.round(talkLevel() * 100)}%` : engine.holding ? `Waiting. Press “Start round ${p.n + 1}”` : next ? `Next: ${phaseName(next)}` : '';
     }
     $('#total').textContent = `Elapsed ${fmt(sessionElapsed())}` + (cfg.speed > 1 ? `  ·  rehearsal ×${cfg.speed}` : '');
   }
@@ -1006,8 +1021,7 @@ function renderNarr() {
   const c = !isCo && narr.active && cueMeta[narr.active];
   card.classList.toggle('speaking', !!c || isCo);
   if (isCo) {
-    const who = co.prep && co.prep.profile ? co.prep.profile.name : 'Callout';
-    $('#narrText').textContent = `${who}: “${calloutLabel(String(narr.active).slice(3))}”`;
+    $('#narrText').textContent = co.said || 'Callout';
     $('#narrWhen').textContent = 'Callout';
     return;
   }
@@ -1036,6 +1050,7 @@ $('#btnNext').addEventListener('click', advance);
 $('#btnExtend').addEventListener('click', extend);
 $('#btnReplay').addEventListener('click', replay);
 $('#btnStop').addEventListener('click', stopSession);
+$('#btnTalk').addEventListener('click', () => toggleTalk());
 $('#btnMusic').addEventListener('click', musicToggle);
 $('#btnNextSong').addEventListener('click', nextSong);
 $('#btnPrevSong').addEventListener('click', prevSong);
@@ -1047,6 +1062,7 @@ document.addEventListener('keydown', (e) => {
   else if (e.key === 'n' || e.key === 'N') advance();
   else if (e.key === '+' || e.key === '=') extend();
   else if (e.key === 'r' || e.key === 'R') replay();
+  else if (e.key === 't' || e.key === 'T') toggleTalk();
   else if (e.key === 'ArrowRight') nextSong();
   else if (e.key === 'ArrowLeft') prevSong();
 });

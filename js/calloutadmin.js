@@ -60,7 +60,7 @@ function render() {
     ...ps.map((p) => {
       const b = h('button', { class: 'co-item' + (p.id === selId ? ' on' : '') },
         h('b', {}, p.name),
-        h('span', { class: 'co-meta' }, h('span', { class: 'chip ' + (p.published ? 'ok' : '') }, p.published ? 'Published' : 'Draft'),
+        h('span', { class: 'co-meta' }, h('span', { class: 'chip ' + (p.published ? 'ok' : '') }, p.published ? 'Published' : p.source === 'invite' && !(p.clips || []).length ? 'Invited, waiting' : 'Draft'),
           h('span', { class: 'co-count' }, countText(p))));
       b.addEventListener('click', () => { selId = p.id; render(); });
       return b;
@@ -71,7 +71,8 @@ function render() {
     h('div', { class: 'co-head' },
       h('button', { class: 'ghost small', onclick: () => app.show('library') }, '← Sessions'),
       h('h2', {}, 'Callouts'), h('span', { class: 'spacer' }), add),
-    h('p', { class: 'help co-intro' }, 'Short clips that a person recorded for Sauna Conductor, like “Let’s do this!” or “Last song!”. A session can pick a profile and play its callouts next to the narration, at moments its host chooses or automatically. Only you see this page.'),
+    h('p', { class: 'help co-intro' }, 'Short clips people recorded for Sauna Conductor, like “Let’s do this!” or “Last song!”, grouped by author. Everyone can add published callouts to any message. To get recordings from someone, ',
+      h('a', { href: '#', onclick: (e) => { e.preventDefault(); app.openSettings('set-callouts'); } }, 'send them an invitation'), ': they record on their phone, no account needed. Only you see this page.'),
     h('div', { class: 'co-grid' }, list, p ? detail(p) : h('div', { class: 'co-detail co-blank' }, h('p', { class: 'muted' }, 'Make a profile for each person who records callouts.'))));
 }
 
@@ -153,6 +154,8 @@ function detail(p) {
   renderKeys();
 
   return h('div', { class: 'co-detail' },
+    h('p', { class: 'muted small' }, 'Short name in messages: ', h('code', {}, p.slug || '(set when saved)'),
+      p.source === 'invite' ? ' · Recorded through an invitation; they agreed on the recording page.' : ''),
     h('div', { class: 'co-fields' },
       h('label', { class: 'f' }, h('span', {}, 'Name'), name),
       h('label', { class: 'f' }, h('span', {}, 'Language'), lang),
@@ -170,10 +173,12 @@ function detail(p) {
 function keyCard(p, key, rerender) {
   const c = catalogOf(key);
   const takes = (p.clips || []).filter((x) => x.key === key);
+  // What they read: the line in the profile's language (Icelandic profiles get Icelandic lines).
+  const head = c ? suggestedLine(key, p.lang) : (takes[0] && takes[0].said) || labelOf(key);
   const add = h('button', { class: 'small' + (takes.length ? '' : ' primary') }, takes.length ? '+ Another take' : '+ Record or upload');
   add.addEventListener('click', async () => {
     const line = suggestedLine(key, p.lang);
-    const r = await chooseRecording({ title: `${p.name}: ${labelOf(key)}`, text: line, maxSec: 30 });
+    const r = await chooseRecording({ title: `${p.name}: ${head}`, text: line, maxSec: 30 });
     if (!r) return;
     add.disabled = true; add.textContent = 'Saving…';
     try {
@@ -196,9 +201,9 @@ function keyCard(p, key, rerender) {
     return h('div', { class: 'co-take' }, play, said, h('span', { class: 'muted small' }, secs(t.duration_ms)), rm);
   });
   return h('div', { class: 'co-key' + (takes.length ? '' : ' none') },
-    h('div', { class: 'co-key-top' }, h('b', {}, labelOf(key)), h('code', {}, tokenFor(key)),
+    h('div', { class: 'co-key-top' }, h('b', {}, head), h('code', {}, tokenFor(p.slug, key)),
       h('span', { class: 'spacer' }), takes.length ? null : h('span', { class: 'chip' }, 'Not recorded')),
-    c ? h('div', { class: 'muted small' }, c.when + (p.lang === 'is' ? ` · e.g. “${c.is}”` : '')) : h('div', { class: 'muted small' }, 'Your own callout: use its token in any message.'),
+    c ? h('div', { class: 'muted small' }, c.when + (p.lang === 'is' ? ` · “${labelOf(key)}”` : '')) : h('div', { class: 'muted small' }, 'Their own callout: use its token in any message.'),
     ...rows,
     h('div', { class: 'row' }, add));
 }

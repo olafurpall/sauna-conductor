@@ -1,15 +1,15 @@
 // Session page: one session at a glance (rounds, cool-downs, narration, messages inside songs),
 // with Run, Edit, Timeline and Share. Songs and messages can be previewed from here.
-import { $, h, toast, fmtSong, fmtDur, fmtDate, download, slug } from './util.js?v=3.1-c91bd7fc';
-import { app } from './app.js?v=3.1-c91bd7fc';
-import * as db from './db.js?v=3.1-c91bd7fc';
-import * as S from './sessions.js?v=3.1-c91bd7fc';
-import { langOf } from './script.js?v=3.1-c91bd7fc';
-import { profileById } from './callouts.js?v=3.1-c91bd7fc';
-import { preview, previewButton } from './preview.js?v=3.1-c91bd7fc';
-import { cloud, sharedWithMe, roleOf, sharedOut } from './cloud.js?v=3.1-c91bd7fc';
-import { openInviteDialog } from './invite.js?v=3.1-c91bd7fc';
-import { openLinkDialog } from './sharelink.js?v=3.1-c91bd7fc';
+import { $, h, toast, fmtSong, fmtDur, fmtDate, download, slug } from './util.js?v=3.2-3eb3c514';
+import { app } from './app.js?v=3.2-3eb3c514';
+import * as db from './db.js?v=3.2-3eb3c514';
+import * as S from './sessions.js?v=3.2-3eb3c514';
+import { langOf } from './script.js?v=3.2-3eb3c514';
+import { readable, authorsIn } from './calloutpick.js?v=3.2-3eb3c514';
+import { preview, previewButton } from './preview.js?v=3.2-3eb3c514';
+import { cloud, sharedWithMe, roleOf, sharedOut } from './cloud.js?v=3.2-3eb3c514';
+import { openInviteDialog } from './invite.js?v=3.2-3eb3c514';
+import { openLinkDialog } from './sharelink.js?v=3.2-3eb3c514';
 
 const el = $('#view-session');
 let s = null;
@@ -126,7 +126,8 @@ function render() {
     h('span', { class: 'chip' }, `${t.rounds} round${t.rounds === 1 ? '' : 's'} · ${t.breakMin} min cool-downs`),
     h('span', { class: 'chip' }, 'Voice: ' + s.voice.name.replace(/ - .*/, '')),
     s.lang && s.lang !== 'en' ? h('span', { class: 'chip' }, langOf(s.lang).native) : null,
-    s.callouts && s.callouts.profile ? h('span', { class: 'chip' }, '📣 ' + ((profileById(s.callouts.profile) || {}).name || 'Callouts') + (s.callouts.auto ? ' · automatic' : '')) : null);
+    authorsIn(s).length ? h('span', { class: 'chip' }, '📣 Callouts: ' + authorsIn(s).join(', ')) : null,
+    S.narrationOn(s) ? null : h('span', { class: 'chip' }, 'Without AI narration'));
 
   el.append(
     h('div', { class: 'ov-top' }, h('button', { class: 'ghost small', onclick: () => app.show('library') }, '← Sessions'), actions),
@@ -142,8 +143,8 @@ function flow() {
   const insFor = (uri) => (s.inserts || []).filter((x) => x.uri === uri).sort((a, b) => a.atMs - b.atMs);
   const cueRow = (id, title) => {
     const st = S.clipState(s, id, recs[id]);
-    const chip = S.clipOkState(st) ? null : h('span', { class: 'chip warn' }, st === 'missing' ? 'Not recorded' : 'Changed — record again');
-    const text = S.cueText(s, id).replace(/\s+/g, ' ').trim();
+    const chip = st === 'off' ? h('span', { class: 'chip' }, 'Not used: you lead') : S.clipOkState(st) ? null : h('span', { class: 'chip warn' }, st === 'missing' ? 'Not recorded' : 'Changed — record again');
+    const text = readable(S.cueText(s, id), s.callouts && s.callouts.profile).replace(/\s+/g, ' ').trim();
     return h('div', { class: 'ov-cue' }, clipButton(id),
       h('div', { class: 'm' }, h('div', { class: 't' }, title, ' ', chip), h('div', { class: 'x' }, text.length > 220 ? text.slice(0, 219) + '…' : text)));
   };
@@ -155,7 +156,7 @@ function flow() {
         h('span', { class: 'm' }, h('div', { class: 't' }, song.name), h('div', { class: 'a' }, song.artists)),
         h('span', { class: 'd' }, fmtSong(song.durationMs))),
       ...ins.map((x) => h('li', { class: 'ins' }, h('span', { class: 'at' }, '↳ ' + fmtSong(x.atMs)), clipButton(S.insertCue(x)),
-        h('span', { class: 'm' }, h('div', { class: 't' }, (x.text || 'Empty message').replace(/\s+/g, ' ').slice(0, 160))))),
+        h('span', { class: 'm' }, h('div', { class: 't' }, readable(x.text || 'Empty message', s.callouts && s.callouts.profile).replace(/\s+/g, ' ').slice(0, 160))))),
     ];
   };
   const phaseBox = (kind, title, dur, theme, cueId, cueTitle, songs, limitMs, editSec) => {

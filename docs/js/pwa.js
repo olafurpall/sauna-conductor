@@ -2,7 +2,7 @@
 // Android and desktop Chrome/Edge offer a one-tap install. Safari has no install prompt a page can
 // open: on iPhone and iPad it goes through ••• → Share → Add to Home Screen, and on a Mac through
 // File → Add to Dock, so the button shows those steps instead.
-import { h, toast } from './util.js?v=3.1-c91bd7fc';
+import { h, toast } from './util.js?v=3.2-3eb3c514';
 
 let deferred = null;
 const buttons = new Set();

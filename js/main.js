@@ -12,8 +12,9 @@ import { sessionView } from './overview.js';
 import { timelineView } from './timeline.js';
 import { calloutsView } from './calloutadmin.js';
 import { preview } from './preview.js';
-import { cloud, initCloud, cloudSummary, callFunction } from './cloud.js';
+import { cloud, initCloud, cloudSummary, callFunction, prefs, savePrefs } from './cloud.js';
 import { initAccount, paintAccount } from './account.js';
+import { initInvitations, paintInvites } from './invitations.js';
 import { welcomeView, onboardView, route, holdRoute, onboarded, takeLinkFromUrl, afterSpotifyRedirect } from './gate.js';
 import { registerServiceWorker } from './pwa.js';
 
@@ -68,6 +69,7 @@ dlg.addEventListener('close', () => { renderPills(); app.emit('spotify'); });
 
 function paintSettings() {
   paintAccount();
+  if (cloud.configured) paintInvites();
   $('#cfgClientId').value = cfg.clientId;
   $('#spCustom').hidden = cfg.clientId === DEFAULT_CLIENT_ID || !!cfg.demo;
   $('#redirectUri').textContent = redirectUri();
@@ -86,6 +88,7 @@ function paintSettings() {
   if (cfg.deviceId && ![...sel.options].some((o) => o.value === cfg.deviceId)) sel.append(h('option', { value: cfg.deviceId }, cfg.deviceName || 'Saved device'));
   sel.value = cfg.deviceId || '';
   $('#cfgSpeed').value = String(cfg.speed);
+  paintTalk();
   $('#cfgDemo').checked = !!cfg.demo;
   $('#cfgFallback').checked = !!cfg.fallbackVoice;
 }
@@ -160,6 +163,16 @@ $('#cfgDevice').addEventListener('change', (e) => {
   saveCfg(); renderPills(); app.emit('spotify');
 });
 
+// Talk button: how loud the music stays while the guide talks (yours, on all your devices).
+function paintTalk() {
+  const v = prefs().talkLevel ?? 40;
+  $('#cfgTalk').value = String(v);
+  $('#talkVal').textContent = v + '%';
+}
+$('#cfgTalk').addEventListener('input', (e) => { $('#talkVal').textContent = e.target.value + '%'; });
+$('#cfgTalk').addEventListener('change', (e) => { savePrefs({ talkLevel: +e.target.value }); toast(`While you talk, the music plays at ${e.target.value}%.`, 2200); });
+app.on('prefs', () => { if ($('#settings').open) paintTalk(); });
+
 $('#cfgSpeed').addEventListener('change', (e) => {
   if (liveView.running) { e.target.value = String(cfg.speed); toast('Change the clock speed between sessions.'); return; }
   cfg.speed = +e.target.value; saveCfg();
@@ -183,6 +196,7 @@ $('#btnDiag').addEventListener('click', () => {
 // ---------------------------------------------------------------- cloud sync
 cloud.isRunning = () => liveView.running;
 initAccount({ isRunning: () => liveView.running });
+if (cloud.configured) initInvitations();
 app.on('cloud-data', () => { if (app.current === 'library') libraryView.enter(); });
 app.on('cloud-runs', () => { if (app.current === 'library') libraryView.enter(); });
 // On the hosted site, ElevenLabs is reached through the server function, with the app's key.

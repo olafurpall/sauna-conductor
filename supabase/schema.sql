@@ -1,4 +1,4 @@
--- Sauna Conductor: database schema for Supabase (version 3.1).
+-- Sauna Conductor: database schema for Supabase (version 3.2).
 -- Run it in the Supabase dashboard → SQL Editor. Running it again is safe.
 --
 -- Model: every person has their own private space (a "workspace" with one owner).
@@ -9,7 +9,8 @@
 -- Each person's own Spotify login lives in user_settings, readable only by that person.
 -- The ElevenLabs and Anthropic keys never reach a browser: they live in app_secrets (or in the
 -- Edge Function secrets) and are used only by the server functions "eleven" and "write".
--- Callout profiles (3.1): short clips a person recorded, set up by the admin, usable by everyone once published.
+-- Callouts (3.1, 3.2): short clips people recorded, by author; collected through invitation links to a public
+-- recording page (the "collect" Edge Function); usable by everyone once published.
 
 -- ------------------------------------------------------------------ tables
 create table if not exists public.workspaces (
@@ -590,6 +591,53 @@ create policy "callouts read"   on storage.objects for select to authenticated u
 create policy "callouts add"    on storage.objects for insert to authenticated with check (bucket_id = 'callouts' and public.is_admin());
 create policy "callouts change" on storage.objects for update to authenticated using (bucket_id = 'callouts' and public.is_admin());
 create policy "callouts remove" on storage.objects for delete to authenticated using (bucket_id = 'callouts' and public.is_admin());
+
+-- ------------------------------------------------------------------ callouts by author, invitations to record (version 3.2)
+-- Every author has a short name ("slug", e.g. bubbi-morthens) used in messages: {callout:bubbi-morthens/lets-start}.
+alter table public.callout_profiles add column if not exists slug text;
+alter table public.callout_profiles add column if not exists source text not null default 'admin';   -- 'admin' | 'invite'
+update public.callout_profiles p set slug = x.slug
+from (
+  select id, coalesce(nullif(trim(both '-' from left(regexp_replace(
+           translate(replace(replace(replace(lower(name), 'þ', 'th'), 'æ', 'ae'), 'ð', 'd'), 'áéíóúýöøåäüàèìòùâêîôûãõñç', 'aeiouyooaauaeiouaeiouaonc'),
+           '[^a-z0-9]+', '-', 'g'), 50)), ''), 'author') || '-' || substr(id::text, 1, 4) as slug
+  from public.callout_profiles where slug is null
+) x
+where p.id = x.id;
+alter table public.callout_profiles alter column slug set not null;
+create unique index if not exists callout_profiles_slug on public.callout_profiles (slug);
+do $$ begin
+  alter table public.callout_profiles add constraint callout_slug_format check (slug ~ '^[a-z0-9][a-z0-9-]{0,59}$');
+exception when duplicate_object then null; end $$;
+
+-- An invitation to record callouts: a private link to the public recording page (record.html?i=<token>).
+-- The "collect" Edge Function (service key) is the only way in for the person invited; only the admin
+-- can see or change invitations in the app.
+create table if not exists public.callout_invites (
+  id              uuid primary key default gen_random_uuid(),
+  token           text not null unique check (length(token) >= 20),
+  profile_id      uuid not null references public.callout_profiles(id) on delete cascade,
+  name            text not null check (length(trim(name)) between 1 and 80),   -- the name the page starts with
+  email           text not null default '',
+  lang            text not null default 'is',
+  note            text not null default '',                                     -- a personal note shown at the top
+  invited_by_name text not null default '',
+  template        jsonb not null default '[]'::jsonb,                           -- [{ key, text }]: the lines to record
+  status          text not null default 'sent' check (status in ('sent', 'opened', 'submitted')),
+  opened_at       timestamptz,
+  submitted_at    timestamptz,
+  revoked         boolean not null default false,
+  created_by      uuid references auth.users(id) on delete set null,
+  created_at      timestamptz not null default now()
+);
+alter table public.callout_clips add column if not exists invite_id uuid references public.callout_invites(id) on delete set null;
+
+alter table public.callout_invites enable row level security;
+drop policy if exists callout_invite_admin on public.callout_invites;
+create policy callout_invite_admin on public.callout_invites for all to authenticated using (public.is_admin()) with check (public.is_admin());
+revoke all on public.callout_invites from anon;
+grant select, insert, update, delete on public.callout_invites to authenticated;
+grant all on public.callout_invites to service_role;
 
 -- ------------------------------------------------------------------ moving to version 3 (one-time, safe to rerun)
 -- 1. One person per space. Anyone who shared a space with its owner keeps every session in it,
