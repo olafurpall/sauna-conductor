@@ -2,19 +2,19 @@
 // narration at each phase) to place extra messages anywhere, even in the middle of a song.
 // A message is recorded with the session's voice, dragged to its spot, and given its own music
 // dip and narrator volume. "Hear it in place" plays the song there with the message on top.
-import { cloud, roleOf } from './cloud.js?v=3.2-3eb3c514';
-import { $, h, toast, fmtSong, clamp, sleep } from './util.js?v=3.2-3eb3c514';
-import { app } from './app.js?v=3.2-3eb3c514';
-import * as db from './db.js?v=3.2-3eb3c514';
-import * as S from './sessions.js?v=3.2-3eb3c514';
-import { eleven, clipKey, prepText, isV3 } from './eleven.js?v=3.2-3eb3c514';
-import { chooseRecording } from './recorder.js?v=3.2-3eb3c514';
-import { sessionLayout, songAtIn, insertStartIn, busyIntervals, fitTime, songPos, messageMs, recordedMsGuess } from './placement.js?v=3.2-3eb3c514';
-import { openGallery, closeGallery, insertAtCursor, trackCursor, tokenChips, suggestDialog } from './calloutpick.js?v=3.2-3eb3c514';
-import { usable, saysOf, describeRef, profileById, profileBySlug, loadProfiles, clipBlob, CALLOUT_MUSIC } from './callouts.js?v=3.2-3eb3c514';
-import { tokenFor, refsIn, calloutOnly, parseRef } from './tokens.js?v=3.2-3eb3c514';
-import { preview } from './preview.js?v=3.2-3eb3c514';
-import { player } from './spotify.js?v=3.2-3eb3c514';
+import { cloud, roleOf } from './cloud.js?v=3.2.1-8eb03f85';
+import { $, h, toast, fmtSong, clamp, sleep } from './util.js?v=3.2.1-8eb03f85';
+import { app } from './app.js?v=3.2.1-8eb03f85';
+import * as db from './db.js?v=3.2.1-8eb03f85';
+import * as S from './sessions.js?v=3.2.1-8eb03f85';
+import { eleven, clipKey, prepText, isV3 } from './eleven.js?v=3.2.1-8eb03f85';
+import { chooseRecording } from './recorder.js?v=3.2.1-8eb03f85';
+import { sessionLayout, songAtIn, insertStartIn, busyIntervals, fitTime, songPos, messageMs, recordedMsGuess } from './placement.js?v=3.2.1-8eb03f85';
+import { openGallery, closeGallery, insertAtCursor, trackCursor, tokenChips, suggestDialog } from './calloutpick.js?v=3.2.1-8eb03f85';
+import { usable, saysOf, describeRef, profileById, profileBySlug, loadProfiles, clipBlob, CALLOUT_MUSIC } from './callouts.js?v=3.2.1-8eb03f85';
+import { tokenFor, refsIn, calloutOnly, parseRef } from './tokens.js?v=3.2.1-8eb03f85';
+import { preview } from './preview.js?v=3.2.1-8eb03f85';
+import { player } from './spotify.js?v=3.2.1-8eb03f85';
 
 const el = $('#view-timeline');
 let s = null;

@@ -125,7 +125,7 @@ export async function initCloud() {
 
   window.addEventListener('focus', () => { if (cloud.ws && Date.now() - cloud.lastSync > 30000) syncAll(); });
   window.addEventListener('online', () => { if (cloud.ws) syncAll(); });
-  setInterval(() => { if (cloud.ws && document.visibilityState === 'visible' && !cloud.isRunning()) syncAll(); }, 120000);
+  setInterval(() => { if (cloud.ws && !cloud.dormant && document.visibilityState === 'visible' && !cloud.isRunning()) syncAll(); }, 120000);
 }
 
 export async function signInWithGoogle() {

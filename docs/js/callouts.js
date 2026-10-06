@@ -5,10 +5,10 @@
 // Authors record their callouts on a public page the admin invites them to (record.html), or the admin
 // adds them on the Callouts page. The clips live in the "callouts" storage bucket and are kept in the
 // browser's cache for offline runs.
-import { log, store } from './util.js?v=3.2-3eb3c514';
-import { app } from './app.js?v=3.2-3eb3c514';
-import { cloud } from './cloud.js?v=3.2-3eb3c514';
-import { parseRef } from './tokens.js?v=3.2-3eb3c514';
+import { log, store } from './util.js?v=3.2.1-8eb03f85';
+import { app } from './app.js?v=3.2.1-8eb03f85';
+import { cloud } from './cloud.js?v=3.2.1-8eb03f85';
+import { parseRef } from './tokens.js?v=3.2.1-8eb03f85';
 
 // The callouts every author is asked for, with a suggested line (they say it their own way).
 export const CATALOG = [

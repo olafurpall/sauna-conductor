@@ -1,6 +1,6 @@
 // Spotify: login (Authorization Code + PKCE), Web API, playback and library tools.
 import { store, sleep, clamp, log, toast } from './util.js';
-import { cfg, app } from './app.js';
+import { cfg, app, saveCfg } from './app.js';
 
 export const SCOPES = [
   'streaming', 'user-read-email', 'user-read-private',
@@ -326,6 +326,10 @@ export async function listDevices() {
   return (j && j.devices) || [];
 }
 
+// Whether Spotify lets an app change this device's volume. Phones and tablets don't: Spotify on an
+// iPhone or Android phone plays at the phone's own volume and ignores volume changes from other apps.
+export const volumeWorks = (d) => !!d && d.supports_volume !== false && !/^(smartphone|tablet)$/i.test(d.type || '');
+
 // ---------------------------------------------------------------- playback
 // One interface over two ways of playing:
 //  - 'browser': this page is the speaker (Spotify Web Playback SDK)
@@ -340,6 +344,23 @@ export const player = {
   get mode() { return cfg.output === 'connect' ? 'connect' : 'browser'; },
   get deviceId() { return this.mode === 'browser' ? this.sdkDevice : cfg.deviceId; },
   get ready() { return auth.connected && (this.mode === 'browser' ? this.sdkReady : !!cfg.deviceId); },
+  // false when Spotify can't change the chosen device's volume (a phone), so the app doesn't pretend to.
+  volumeOk: null,
+  get canSetVolume() { return this.mode === 'browser' || (this.volumeOk ?? cfg.deviceVolume) !== false; },
+  async checkVolume() {
+    if (this.mode !== 'connect' || !cfg.deviceId || !auth.connected) return this.canSetVolume;
+    try {
+      const list = await listDevices();
+      const d = list.find((x) => x.id === cfg.deviceId) || list.find((x) => x.name === cfg.deviceName);
+      if (d) {
+        const ok = volumeWorks(d);
+        if (ok !== this.volumeOk) log('volume-control', d.name, d.type, ok ? 'yes' : 'no');
+        this.volumeOk = ok;
+        if (cfg.deviceVolume !== ok || cfg.deviceType !== d.type) { cfg.deviceVolume = ok; cfg.deviceType = d.type; saveCfg(); }
+      }
+    } catch (e) { log('volume-check', e.message); }
+    return this.canSetVolume;
+  },
   position() { return this.paused ? this.pos : this.pos + (performance.now() - this.posAt); },
   nextUri() { return (this.queue[0] && this.queue[0].uri) || (this.sdkNext[0] && this.sdkNext[0].uri) || null; },
 
@@ -348,6 +369,7 @@ export const player = {
     if (this.mode === 'browser') this.loadSdk();
     clearInterval(this.timer);
     this.timer = setInterval(() => this.poll(), this.mode === 'browser' ? 1000 : 1500);
+    if (this.mode === 'connect') this.checkVolume().then(() => app.emit('spotify'));
     getMe().then((me) => {
       auth.problem = '';
       app.emit('spotify');
@@ -551,7 +573,7 @@ export const player = {
     v = clamp(v, 0, 1);
     this.level = v;
     if (this.mode === 'browser') { if (this.sdk && this.sdkReady) await this.sdk.setVolume(v).catch(() => {}); return; }
-    if (!cfg.deviceId) return;
+    if (!cfg.deviceId || !this.canSetVolume) return;
     const pct = Math.round(v * 100);
     if (this.volInflight) { this.volPending = pct; return; }
     if (pct === this.volSent) return;
@@ -560,7 +582,11 @@ export const player = {
       await api('PUT', `/me/player/volume?volume_percent=${pct}&device_id=${encodeURIComponent(cfg.deviceId)}`);
       this.volSent = pct;
       await sleep(180);
-    } catch (e) { log('vol', e.message); }
+    } catch (e) {
+      log('vol', e.status, e.message);
+      // Spotify refuses: this device's volume can't be changed by apps.
+      if (e.status === 403) { this.volumeOk = false; this.volPending = null; app.emit('volume-blocked'); }
+    }
     this.volInflight = false;
     if (this.volPending != null && this.volPending !== this.volSent) {
       const p = this.volPending; this.volPending = null;

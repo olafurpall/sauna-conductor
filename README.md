@@ -121,6 +121,8 @@ The controls sit right under the ring, so on a phone they're on the first screen
 
 **🎙 Talk** is for when you want to say something to the group yourself. Press it and the music dips to 40% of its level (change this under Settings → *Talk button*; it follows you to your other devices). If the narrator is speaking, it fades out and that message is left for you to finish. Nothing new is narrated while you talk. Press **Resume** to bring the music back up.
 
+When the music plays on a **phone** (the Spotify app on an iPhone or Android), Spotify can't change its volume: a phone plays at its own volume. There, Talk **pauses** the music and Resume plays it again; the app says so when the session starts, and the device list in Settings marks such devices *plays at its own volume*. For the music to dip, play it on a computer (in the browser or the Spotify app) or on a speaker.
+
 **Without AI narration**: the switch at the top of *Narration* in the session creator. Off, the narration messages are greyed out and nothing is recorded or played for them: you lead the session yourself. The music, the timers, messages inside songs, callouts and Talk all still work.
 
 In song rounds the timer counts down the songs that are left, and skipping past the last song moves on to the cool-down. *Up next* shows the round's remaining songs, then what comes after the round. "+1 song" adds the next unused song to the end of the round. It never goes into Spotify's own queue, so it can't leak into later rounds.

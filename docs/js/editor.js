@@ -1,20 +1,20 @@
 // Session creator / editor: playlists, timing, voice, editable narration, recording.
-import { $, $$, h, toast, fmtDur, fmtSong, autosize, sleep, now, store } from './util.js?v=3.2-3eb3c514';
-import { planRounds, planBreaks } from './planner.js?v=3.2-3eb3c514';
-import { app, cfg } from './app.js?v=3.2-3eb3c514';
-import * as db from './db.js?v=3.2-3eb3c514';
-import * as S from './sessions.js?v=3.2-3eb3c514';
-import { cuePlan, defaultText, LANGS, langOf, hasBuiltInText } from './script.js?v=3.2-3eb3c514';
-import { eleven, isV3, clipKey, prepText } from './eleven.js?v=3.2-3eb3c514';
-import { chooseRecording, checkUpload } from './recorder.js?v=3.2-3eb3c514';
-import { tokenFor, refsIn, parseRef, hasTokens, calloutOnly } from './tokens.js?v=3.2-3eb3c514';
-import { loadProfiles, profileById, profileBySlug, keysOf, usable, describeRef } from './callouts.js?v=3.2-3eb3c514';
-import { openGallery, insertAtCursor, trackCursor, tokenChips, suggestDialog, suggestedCount, removeSuggestions, closeGallery } from './calloutpick.js?v=3.2-3eb3c514';
-import { messageMs, recordedMsGuess } from './placement.js?v=3.2-3eb3c514';
-import { cloud, roleOf } from './cloud.js?v=3.2-3eb3c514';
-import { writeNarration, applyNarration, checkinSlots } from './writer.js?v=3.2-3eb3c514';
-import { auth, myPlaylists, parseUri, playlistInfo, sourceTracks, searchTracks } from './spotify.js?v=3.2-3eb3c514';
-import { preview, previewButton } from './preview.js?v=3.2-3eb3c514';
+import { $, $$, h, toast, fmtDur, fmtSong, autosize, sleep, now, store } from './util.js?v=3.2.1-8eb03f85';
+import { planRounds, planBreaks } from './planner.js?v=3.2.1-8eb03f85';
+import { app, cfg } from './app.js?v=3.2.1-8eb03f85';
+import * as db from './db.js?v=3.2.1-8eb03f85';
+import * as S from './sessions.js?v=3.2.1-8eb03f85';
+import { cuePlan, defaultText, LANGS, langOf, hasBuiltInText } from './script.js?v=3.2.1-8eb03f85';
+import { eleven, isV3, clipKey, prepText } from './eleven.js?v=3.2.1-8eb03f85';
+import { chooseRecording, checkUpload } from './recorder.js?v=3.2.1-8eb03f85';
+import { tokenFor, refsIn, parseRef, hasTokens, calloutOnly } from './tokens.js?v=3.2.1-8eb03f85';
+import { loadProfiles, profileById, profileBySlug, keysOf, usable, describeRef } from './callouts.js?v=3.2.1-8eb03f85';
+import { openGallery, insertAtCursor, trackCursor, tokenChips, suggestDialog, suggestedCount, removeSuggestions, closeGallery } from './calloutpick.js?v=3.2.1-8eb03f85';
+import { messageMs, recordedMsGuess } from './placement.js?v=3.2.1-8eb03f85';
+import { cloud, roleOf } from './cloud.js?v=3.2.1-8eb03f85';
+import { writeNarration, applyNarration, checkinSlots } from './writer.js?v=3.2.1-8eb03f85';
+import { auth, myPlaylists, parseUri, playlistInfo, sourceTracks, searchTracks } from './spotify.js?v=3.2.1-8eb03f85';
+import { preview, previewButton } from './preview.js?v=3.2.1-8eb03f85';
 
 const el = $('#view-editor');
 let s = null;            // the session being edited

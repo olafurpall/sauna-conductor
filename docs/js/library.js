@@ -1,13 +1,13 @@
 // Sessions library: saved sessions, import/export, and the Claude playlist workflow.
-import { $, h, toast, fmt, fmtDur, fmtDate, fmtSong, download, pickFile, slug, store } from './util.js?v=3.2-3eb3c514';
-import { liveView, interruptedRun, discardRun, HISTORY_KEY } from './live.js?v=3.2-3eb3c514';
-import { app } from './app.js?v=3.2-3eb3c514';
-import * as db from './db.js?v=3.2-3eb3c514';
-import * as S from './sessions.js?v=3.2-3eb3c514';
-import { langOf } from './script.js?v=3.2-3eb3c514';
-import { auth, exportLibrary, importPlan, openUrl } from './spotify.js?v=3.2-3eb3c514';
-import { eleven } from './eleven.js?v=3.2-3eb3c514';
-import { cloud, sharedWithMe, roleOf, sharedOut } from './cloud.js?v=3.2-3eb3c514';
+import { $, h, toast, fmt, fmtDur, fmtDate, fmtSong, download, pickFile, slug, store } from './util.js?v=3.2.1-8eb03f85';
+import { liveView, interruptedRun, discardRun, HISTORY_KEY } from './live.js?v=3.2.1-8eb03f85';
+import { app } from './app.js?v=3.2.1-8eb03f85';
+import * as db from './db.js?v=3.2.1-8eb03f85';
+import * as S from './sessions.js?v=3.2.1-8eb03f85';
+import { langOf } from './script.js?v=3.2.1-8eb03f85';
+import { auth, exportLibrary, importPlan, openUrl } from './spotify.js?v=3.2.1-8eb03f85';
+import { eleven } from './eleven.js?v=3.2.1-8eb03f85';
+import { cloud, sharedWithMe, roleOf, sharedOut } from './cloud.js?v=3.2.1-8eb03f85';
 
 const el = $('#view-library');
 

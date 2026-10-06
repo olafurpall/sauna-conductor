@@ -65,12 +65,14 @@ export function toast(msg, ms = 4200) {
 // Event log: kept in memory for tests, and the last 600 lines (with times) in localStorage
 // so "Copy diagnostics" still works after a crash or reload.
 const DIAG = (() => { try { const v = JSON.parse(localStorage.getItem('sc.diag') || '[]'); return Array.isArray(v) ? v.slice(-300).concat(['----- page loaded ' + new Date().toISOString() + ' -----']) : []; } catch { return []; } })();
-let diagTimer = null;
+let diagTimer = null, diagKeep = true;
+export const stopDiagnostics = () => { diagKeep = false; clearTimeout(diagTimer); };   // a tab that stepped aside
 export function log(...a) {
   const line = a.map((x) => (typeof x === 'string' ? x : JSON.stringify(x))).join(' ');
   (window.__scLog = window.__scLog || []).push(line);
   DIAG.push(new Date().toISOString().slice(11, 19) + ' ' + line);
   if (DIAG.length > 600) DIAG.splice(0, DIAG.length - 600);
+  if (!diagKeep) return;
   clearTimeout(diagTimer);
   diagTimer = setTimeout(() => { try { localStorage.setItem('sc.diag', JSON.stringify(DIAG)); } catch { /* ignore */ } }, 800);
 }

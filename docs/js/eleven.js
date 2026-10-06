@@ -1,8 +1,8 @@
 // ElevenLabs: voices, voice library, models and text-to-speech.
 // On the hosted site every call goes through the app's server function ("eleven"), which holds the
 // key; signed-in people never need one. Without the cloud (the launcher version) the user's own key is used.
-import { store, hash } from './util.js?v=3.2-3eb3c514';
-import { stripTokens } from './tokens.js?v=3.2-3eb3c514';
+import { store, hash } from './util.js?v=3.2.1-8eb03f85';
+import { stripTokens } from './tokens.js?v=3.2.1-8eb03f85';
 
 const BASE = 'https://api.elevenlabs.io';
 

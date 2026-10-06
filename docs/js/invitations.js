@@ -1,9 +1,9 @@
 // Settings → Callout recordings (admin): invite people to record callouts on the public recording page,
 // and see who has opened their link and who has sent their recordings.
-import { $, h, toast, fmtDate } from './util.js?v=3.2-3eb3c514';
-import { app } from './app.js?v=3.2-3eb3c514';
-import { cloud } from './cloud.js?v=3.2-3eb3c514';
-import { callouts, createInvite, listInvites, revokeInvite, inviteUrl, inviteMessage, loadProfiles, profileById } from './callouts.js?v=3.2-3eb3c514';
+import { $, h, toast, fmtDate } from './util.js?v=3.2.1-8eb03f85';
+import { app } from './app.js?v=3.2.1-8eb03f85';
+import { cloud } from './cloud.js?v=3.2.1-8eb03f85';
+import { callouts, createInvite, listInvites, revokeInvite, inviteUrl, inviteMessage, loadProfiles, profileById } from './callouts.js?v=3.2.1-8eb03f85';
 
 let invites = [];
 let fresh = null;          // the invitation just made: its links are shown open

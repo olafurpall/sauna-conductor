@@ -1,9 +1,9 @@
 // Boot: settings dialog, status pills, migration from v1, first view.
-import { $, $$, h, toast, uid, sleep, diagnostics, store } from './util.js';
+import { $, $$, h, toast, uid, sleep, diagnostics, stopDiagnostics, store } from './util.js';
 import { app, cfg, saveCfg, legacyCfg, VERSION, DEFAULT_CLIENT_ID } from './app.js';
 import * as db from './db.js';
 import * as S from './sessions.js';
-import { auth, login, logout, adoptLogin, handleRedirect, redirectUri, player, listDevices, parseUri } from './spotify.js';
+import { auth, login, logout, adoptLogin, handleRedirect, redirectUri, player, listDevices, volumeWorks, parseUri } from './spotify.js';
 import { eleven } from './eleven.js';
 import { libraryView } from './library.js';
 import { editorView } from './editor.js';
@@ -87,6 +87,7 @@ function paintSettings() {
   const sel = $('#cfgDevice');
   if (cfg.deviceId && ![...sel.options].some((o) => o.value === cfg.deviceId)) sel.append(h('option', { value: cfg.deviceId }, cfg.deviceName || 'Saved device'));
   sel.value = cfg.deviceId || '';
+  paintDeviceHint();
   $('#cfgSpeed').value = String(cfg.speed);
   paintTalk();
   $('#cfgDemo').checked = !!cfg.demo;
@@ -138,29 +139,49 @@ $$('input[name=output]').forEach((r) => r.addEventListener('change', () => {
   if (liveView.running) toast('The change takes effect after the current session.');
   else player.restart();
   if (cfg.output === 'connect') loadDevices();
-  renderPills();
+  paintDeviceHint(); renderPills();
 }));
 
+let devices = [];
+// Remembers what the chosen device allows: phones play at their own volume (Talk pauses the music there).
+function rememberDevice(d) {
+  cfg.deviceType = d ? d.type : '';
+  cfg.deviceVolume = d ? volumeWorks(d) : null;
+  player.volumeOk = cfg.deviceVolume;
+}
+function paintDeviceHint() {
+  const el = $('#deviceHint');
+  const blocked = cfg.output === 'connect' && !!cfg.deviceId && cfg.deviceVolume === false;
+  el.hidden = !blocked;
+  if (blocked) el.textContent = `Spotify can’t change the volume on ${cfg.deviceName || 'this device'}: phones play at their own volume. `
+    + 'Talk pauses the music there instead of turning it down. For the music to dip, play it on a computer or a speaker.';
+}
 async function loadDevices() {
   const sel = $('#cfgDevice');
   if (!auth.connected) { toast('Connect Spotify first.'); return; }
   try {
     const list = (await listDevices()).filter((d) => d.name !== 'Sauna Conductor');
+    devices = list;
     sel.innerHTML = '';
     sel.append(h('option', { value: '' }, list.length ? 'Choose a device…' : 'No devices found. Open the Spotify app.'));
-    list.forEach((d) => sel.append(h('option', { value: d.id, selected: d.id === cfg.deviceId }, `${d.name} (${d.type})`)));
-    if (cfg.deviceId && !list.some((d) => d.id === cfg.deviceId)) {
-      const same = list.find((d) => d.name === cfg.deviceName);   // device ids can change when the app restarts
-      if (same) { cfg.deviceId = same.id; saveCfg(); sel.value = same.id; }
+    list.forEach((d) => sel.append(h('option', { value: d.id, selected: d.id === cfg.deviceId }, `${d.name} (${d.type}${volumeWorks(d) ? '' : ', plays at its own volume'})`)));
+    let mine = list.find((d) => d.id === cfg.deviceId);
+    if (cfg.deviceId && !mine) {
+      mine = list.find((d) => d.name === cfg.deviceName);   // device ids can change when the app restarts
+      if (mine) { cfg.deviceId = mine.id; sel.value = mine.id; }
     }
+    if (mine) { rememberDevice(mine); saveCfg(); }
+    paintDeviceHint();
   } catch (e) { toast(e.message); }
 }
 $('#btnDevices').addEventListener('click', loadDevices);
 $('#cfgDevice').addEventListener('change', (e) => {
   const o = e.target.selectedOptions[0];
+  const d = devices.find((x) => x.id === e.target.value);
   cfg.deviceId = e.target.value;
-  cfg.deviceName = o ? o.textContent.replace(/ \([^)]*\)$/, '') : '';
-  saveCfg(); renderPills(); app.emit('spotify');
+  cfg.deviceName = d ? d.name : o ? o.textContent.replace(/ \([^)]*\)$/, '') : '';
+  rememberDevice(d);
+  saveCfg(); renderPills(); paintDeviceHint(); app.emit('spotify');
 });
 
 // Talk button: how loud the music stays while the guide talks (yours, on all your devices).
@@ -242,6 +263,8 @@ let dormant = false;
 function goDormant(title, text) {
   if (dormant) return;
   dormant = true;
+  stopDiagnostics();
+  cloud.dormant = true;
   db.shutdown();
   player.shutdown();
   document.body.append(h('div', { class: 'dormant' }, h('div', { class: 'card' },

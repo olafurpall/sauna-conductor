@@ -96,7 +96,11 @@ async function playCallout(ref, tok, volume) {
 // The guide presses Talk to say something: the music dips to their Talk level (Settings, 40% by
 // default) and any narration that is playing fades out and is left unfinished (the guide says it).
 // While talking, no narration, messages or callouts start. Resume brings the music back up.
-const talk = { on: false, mul: 1, timer: 0 };
+// Where Spotify can't change the volume (a phone plays at its own volume), Talk pauses the music
+// instead and Resume plays it again ("held").
+const talk = { on: false, mul: 1, timer: 0, held: false, paused: false };
+const canDip = () => !music.live || player.canSetVolume;
+const deviceWord = () => (/tablet/i.test(cfg.deviceType || '') ? 'the tablet' : /smartphone/i.test(cfg.deviceType || '') ? 'the phone' : 'this device');
 const talkLevel = () => clamp((prefs().talkLevel ?? 40) / 100, 0, 1);
 function talkTo(target, ms) {
   clearInterval(talk.timer);
@@ -126,17 +130,44 @@ function fadeOutNarration(ms = 1200) {
     if (i >= steps) { clearInterval(narr.fade); stopNarration(); }
   }, ms / steps);
 }
+function holdMusic() {
+  talk.held = true;
+  if (music.live && !player.paused) { talk.paused = true; player.pause(); }
+  log('talk-hold', talk.paused ? 'paused' : 'not playing');
+  renderMeter(music.level * music.trans * talk.mul);
+}
+function releaseMusic() {
+  const play = talk.paused && music.live && !engine.paused && !music.userPaused;
+  talk.held = false; talk.paused = false;
+  if (play) player.resume();
+  renderMeter(music.level * music.trans * talk.mul);
+}
 function toggleTalk(force) {
   if (!engine.running && !talk.on) return;
   const on = force === undefined ? !talk.on : !!force;
   if (on === talk.on) return;
   talk.on = on;
-  log('talk', on ? 'on' : 'off', Math.round(talkLevel() * 100));
-  if (on) { fadeOutNarration(); talkTo(talkLevel(), 900); }
-  else talkTo(1, 1500);
+  log('talk', on ? 'on' : 'off', canDip() ? Math.round(talkLevel() * 100) : 'pause');
+  if (on) { fadeOutNarration(); if (canDip()) talkTo(talkLevel(), 900); else holdMusic(); }
+  else { if (talk.held) releaseMusic(); talkTo(1, 1500); }
   render();
 }
-app.on('prefs', () => { if (talk.on) talkTo(talkLevel(), 400); });
+app.on('prefs', () => { if (talk.on && !talk.held) talkTo(talkLevel(), 400); });
+// Spotify refused a volume change: from now on Talk pauses the music on this device.
+let volumeWarned = false;
+app.on('volume-blocked', () => {
+  if (!engine.running) return;
+  if (talk.on && !talk.held) { clearInterval(talk.timer); talk.mul = 1; holdMusic(); }
+  warnVolume();
+  render(); renderMeter(music.level * music.trans * talk.mul);
+});
+function warnVolume() {
+  if (volumeWarned || !music.live || player.canSetVolume) return;
+  volumeWarned = true;
+  log('volume-fixed', cfg.deviceName || '');
+  toast(`Spotify can’t change the volume on ${cfg.deviceName || deviceWord()}, so the music plays at ${deviceWord()}’s own volume. Talk pauses the music instead of turning it down.`, 9000);
+}
+const talkText = () => (talk.held ? 'You’re talking · music paused' : `You're talking · music at ${Math.round(talkLevel() * 100)}%`);
 
 // ---------------------------------------------------------------- music level
 // Volume = phase level × song-transition multiplier.
@@ -180,7 +211,7 @@ async function switchMusic(kind, tok, startLevel) {
   if (!uri) return;
   const res = resumeFor(uri);
   if (player.contextUri === uri && !res) {
-    if (player.paused) await player.resume();
+    if (player.paused && !talk.held) await player.resume();
     await music.fadeTo(startLevel, 2500, tok);
     return;
   }
@@ -195,6 +226,7 @@ async function switchMusic(kind, tok, startLevel) {
   await ensureSwitched((t, ctx) => !!ctx && ctx.endsWith(id), go, tok, 'playlist');
   if (tok !== engine.token) return;
   if (engine.paused) await player.pause();
+  else if (talk.held) { talk.paused = true; await player.pause(); }
   await music.fadeTo(startLevel, 3000, tok);
 }
 
@@ -245,6 +277,7 @@ async function startList(tracks, tok, startLevel, onStarted) {
   if (tok !== engine.token) return;
   if (onStarted) onStarted();
   if (engine.paused) await player.pause();
+  else if (talk.held) { talk.paused = true; await player.pause(); }
   await music.fadeTo(startLevel, 3000, tok);
 }
 
@@ -267,7 +300,7 @@ function addSong() {
 }
 
 function extendIfNeeded(p) {
-  if (!musicClock(p) || !p.sent || p.sent >= p.tracks.length || p.extending) return false;
+  if (!musicClock(p) || !p.sent || p.sent >= p.tracks.length || p.extending || talk.held) return false;
   const idx = setIndex(p);
   const lastSent = p.sent - 1;
   const curRem = player.current ? (player.current.durationMs || 0) - player.position() : 0;
@@ -492,6 +525,7 @@ async function readyToPlay() {
     for (let i = 0; i < 40 && !player.ready; i++) await sleep(250);
     if (!player.ready) { toast('The Spotify player did not start. Reload the page and try again.', 7000); return false; }
   }
+  if (player.mode === 'connect') await Promise.race([player.checkVolume(), sleep(2500)]);
   return true;
 }
 
@@ -503,8 +537,10 @@ function unlockAudio() {
 function resetRunState() {
   engine.running = true; engine.paused = false;
   heatResume = null; music.demoCtx = null; music.trans = 1; music.userPaused = false;
+  talk.on = false; talk.mul = 1; talk.held = false; talk.paused = false; clearInterval(talk.timer);
   extraUsed = new Set();
   music.set(0);
+  volumeWarned = false; warnVolume();
 }
 
 async function startSession() {
@@ -621,7 +657,7 @@ function togglePause() {
   } else {
     const d = now() - engine.pausedAt;
     engine.pausedMs += d; engine.sessionPausedMs += d; engine.paused = false;
-    if (music.live) player.resume();
+    if (music.live && !talk.held) player.resume();
     if (narr.paused) { narr.paused = false; if (narr.tts) window.speechSynthesis && speechSynthesis.resume(); else narr.audio.play().catch(() => {}); }
   }
   render();
@@ -665,7 +701,7 @@ async function stopSession() {
   await music.fadeTo(0, 2500, tok);
   if (music.live) await player.pause();
   engine.running = false; engine.idx = -1; engine.holding = false;
-  talk.on = false; clearInterval(talk.timer); talk.mul = 1;
+  talk.on = false; clearInterval(talk.timer); talk.mul = 1; talk.held = false; talk.paused = false;
   releaseWakeLock();
   render(); renderQueue(); renderResume();
 }
@@ -750,7 +786,7 @@ function tick() {
     const last = p.tracks.length - 1;
     const idx = setIndex(p);
     const wrapped = idx >= 0 && idx < last && now() - (music.lastBack || 0) > 4000;   // Spotify went back to the start of the list
-    const pastEnd = p.seen === last && !narr.active && !music.userPaused && (idx < 0 || wrapped || (player.paused && player.position() < 1500));
+    const pastEnd = p.seen === last && !narr.active && !music.userPaused && !talk.held && (idx < 0 || wrapped || (player.paused && player.position() < 1500));
     const overdue = elapsedMs() > p.durMs + engine.extraMs + 45000;
     if ((rem != null && rem <= 700) || pastEnd || overdue) { log('set-end', rem, pastEnd, overdue); advance(); return; }
   } else if (p && !engine.paused) {
@@ -824,7 +860,7 @@ async function playInsert(p, ins) {
 // ---------------------------------------------------------------- music controls
 async function musicToggle() {
   if (cfg.demo || !player.ready) return;
-  if (player.paused) { music.userPaused = false; await player.resume(); }
+  if (player.paused) { music.userPaused = false; talk.held = false; talk.paused = false; await player.resume(); }
   else { music.userPaused = true; await player.pause(); }
   renderNowPlaying();
 }
@@ -874,7 +910,9 @@ function render() {
   tb.hidden = !engine.running;
   tb.classList.toggle('on', talk.on);
   tb.textContent = talk.on ? '▶ Resume' : '🎙 Talk';
-  tb.title = talk.on ? 'Bring the music back up (T)' : `Say something: the music dips to ${Math.round(talkLevel() * 100)}% and the narrator stops (T)`;
+  tb.title = talk.on ? (talk.held ? 'Play the music again (T)' : 'Bring the music back up (T)')
+    : canDip() ? `Say something: the music dips to ${Math.round(talkLevel() * 100)}% and the narrator stops (T)`
+    : `Say something: the music pauses (Spotify can’t turn down ${deviceWord()}) and the narrator stops (T)`;
   body.classList.toggle('talking', talk.on);
   body.classList.toggle('phase-heat', !!p && p.type === 'round');
   body.classList.toggle('phase-cool', !!p && p.type === 'break');
@@ -903,13 +941,13 @@ function render() {
     theme.textContent = p.theme || '';
     if (p.durMs == null) {
       $('#timer').textContent = fmt(sessionElapsed());
-      $('#sub').textContent = talk.on ? `You're talking · music at ${Math.round(talkLevel() * 100)}%` : 'Total session time';
+      $('#sub').textContent = talk.on ? talkText() : 'Total session time';
       prog.style.strokeDashoffset = 0;
     } else {
       const rem = remainingMs(), dur = p.durMs + engine.extraMs;
       $('#timer').textContent = fmt(rem);
       prog.style.strokeDashoffset = RING_C * clamp(rem / dur, 0, 1);
-      $('#sub').textContent = talk.on ? `You're talking · music at ${Math.round(talkLevel() * 100)}%` : engine.holding ? `Waiting. Press “Start round ${p.n + 1}”` : next ? `Next: ${phaseName(next)}` : '';
+      $('#sub').textContent = talk.on ? talkText() : engine.holding ? `Waiting. Press “Start round ${p.n + 1}”` : next ? `Next: ${phaseName(next)}` : '';
     }
     $('#total').textContent = `Elapsed ${fmt(sessionElapsed())}` + (cfg.speed > 1 ? `  ·  rehearsal ×${cfg.speed}` : '');
   }
@@ -941,8 +979,11 @@ function render() {
 }
 
 function renderMeter(v) {
-  $('#meterFill').style.width = Math.round(v * 100) + '%';
-  $('#meterVal').textContent = Math.round(v * 100) + '%';
+  // A phone plays at its own volume: don't show a level the app can't set.
+  const fixed = music.live && !player.canSetVolume;
+  $('#meterFill').parentElement.classList.toggle('fixed', fixed);
+  $('#meterFill').style.width = (fixed ? (talk.held || player.paused ? 0 : 100) : Math.round(v * 100)) + '%';
+  $('#meterVal').textContent = fixed ? (talk.held ? 'Paused while you talk' : `Set on ${deviceWord()}`) : Math.round(v * 100) + '%';
 }
 
 function renderNowPlaying() {
@@ -1031,7 +1072,7 @@ function renderNarr() {
 
 function renderAll() {
   buildTimeline();
-  render(); renderNowPlaying(); renderSong(); renderQueue(); renderNarr(); renderMeter(music.level * music.trans);
+  render(); renderNowPlaying(); renderSong(); renderQueue(); renderNarr(); renderMeter(music.level * music.trans * talk.mul);
   renderResume();
   if (!sess) {
     $('#kicker').textContent = 'No session loaded';

@@ -1,15 +1,15 @@
 // Session page: one session at a glance (rounds, cool-downs, narration, messages inside songs),
 // with Run, Edit, Timeline and Share. Songs and messages can be previewed from here.
-import { $, h, toast, fmtSong, fmtDur, fmtDate, download, slug } from './util.js?v=3.2-3eb3c514';
-import { app } from './app.js?v=3.2-3eb3c514';
-import * as db from './db.js?v=3.2-3eb3c514';
-import * as S from './sessions.js?v=3.2-3eb3c514';
-import { langOf } from './script.js?v=3.2-3eb3c514';
-import { readable, authorsIn } from './calloutpick.js?v=3.2-3eb3c514';
-import { preview, previewButton } from './preview.js?v=3.2-3eb3c514';
-import { cloud, sharedWithMe, roleOf, sharedOut } from './cloud.js?v=3.2-3eb3c514';
-import { openInviteDialog } from './invite.js?v=3.2-3eb3c514';
-import { openLinkDialog } from './sharelink.js?v=3.2-3eb3c514';
+import { $, h, toast, fmtSong, fmtDur, fmtDate, download, slug } from './util.js?v=3.2.1-8eb03f85';
+import { app } from './app.js?v=3.2.1-8eb03f85';
+import * as db from './db.js?v=3.2.1-8eb03f85';
+import * as S from './sessions.js?v=3.2.1-8eb03f85';
+import { langOf } from './script.js?v=3.2.1-8eb03f85';
+import { readable, authorsIn } from './calloutpick.js?v=3.2.1-8eb03f85';
+import { preview, previewButton } from './preview.js?v=3.2.1-8eb03f85';
+import { cloud, sharedWithMe, roleOf, sharedOut } from './cloud.js?v=3.2.1-8eb03f85';
+import { openInviteDialog } from './invite.js?v=3.2.1-8eb03f85';
+import { openLinkDialog } from './sharelink.js?v=3.2.1-8eb03f85';
 
 const el = $('#view-session');
 let s = null;

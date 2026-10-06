@@ -2,9 +2,9 @@
 // for Sauna Conductor, with no account. Their name is filled in from the invitation; there is a short
 // introduction, one line per callout (Record → Stop → Listen → Record again), their own lines at the
 // bottom, an agreement to tick, and Send. Everything goes through the "collect" server function.
-import { SUPABASE_URL, SUPABASE_KEY } from './config.js?v=3.2-3eb3c514';
-import { $, h, toast } from './util.js?v=3.2-3eb3c514';
-import { tidy, canRecord } from './recorder.js?v=3.2-3eb3c514';
+import { SUPABASE_URL, SUPABASE_KEY } from './config.js?v=3.2.1-8eb03f85';
+import { $, h, toast } from './util.js?v=3.2.1-8eb03f85';
+import { tidy, canRecord } from './recorder.js?v=3.2.1-8eb03f85';
 
 const MAX_MS = 30000;
 const T = {

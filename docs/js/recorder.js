@@ -2,8 +2,8 @@
 // or recorded right here with the microphone.
 // A microphone recording is tidied before it is used: silence trimmed from both ends, the level
 // brought up to match the other messages, and saved as a WAV that every browser can play.
-import { h, toast, pickFile } from './util.js?v=3.2-3eb3c514';
-import { stripTokens } from './tokens.js?v=3.2-3eb3c514';
+import { h, toast, pickFile } from './util.js?v=3.2.1-8eb03f85';
+import { stripTokens } from './tokens.js?v=3.2.1-8eb03f85';
 
 const AUDIO_EXT = /\.(mp3|m4a|aac|wav|ogg|oga|opus|webm|flac)$/i;
 const MAX_UPLOAD = 20 * 1024 * 1024;

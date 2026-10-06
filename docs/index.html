@@ -26,7 +26,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@400;500;600&family=IBM+Plex+Mono:wght@200;300;400&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="css/app.css?v=3.2-3eb3c514">
+<link rel="stylesheet" href="css/app.css?v=3.2.1-8eb03f85">
 </head>
 <body class="phase-idle">
 <div class="sky" aria-hidden="true"></div>
@@ -280,6 +280,7 @@
         <button class="small" id="btnDevices">Refresh</button>
         <span class="muted small">Open the Spotify app first so it shows up here.</span>
       </div>
+      <p class="hint-box" id="deviceHint" hidden></p>
     </section>
 
     <section class="set-sec" id="set-talk">
@@ -307,6 +308,6 @@
   // Signed-out visitors land on the front page: hide the app until it knows (avoids a flash of the app).
   try { if (!localStorage.getItem('sc.sb-auth') && location.protocol !== 'file:') document.body.classList.add('booting'); } catch (e) { /* ignore */ }
 </script>
-<script type="module" src="js/main.js?v=3.2-3eb3c514"></script>
+<script type="module" src="js/main.js?v=3.2.1-8eb03f85"></script>
 </body>
 </html>

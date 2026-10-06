@@ -1,12 +1,12 @@
 // Putting callouts into a session: the gallery (opened from 📣 on any message, like an emoji picker,
 // with the callouts grouped by author) and "Suggest callouts", which places one author's callouts at
 // the right moments: as small messages inside songs, and at the start or end of phase messages.
-import { h, toast, store } from './util.js?v=3.2-3eb3c514';
-import * as S from './sessions.js?v=3.2-3eb3c514';
-import { cueForRound } from './script.js?v=3.2-3eb3c514';
-import { usable, keysOf, saysOf, labelOf, catalogOf, playKey, profileBySlug, profileById, describeRef, stopPreview, calloutMs } from './callouts.js?v=3.2-3eb3c514';
-import { sessionLayout, busyIntervals, fitTime, songPos, insertStartIn, messageMs } from './placement.js?v=3.2-3eb3c514';
-import { tokenFor, tokensIn, refsIn, removeToken, parseRef, TOKEN_RE } from './tokens.js?v=3.2-3eb3c514';
+import { h, toast, store } from './util.js?v=3.2.1-8eb03f85';
+import * as S from './sessions.js?v=3.2.1-8eb03f85';
+import { cueForRound } from './script.js?v=3.2.1-8eb03f85';
+import { usable, keysOf, saysOf, labelOf, catalogOf, playKey, profileBySlug, profileById, describeRef, stopPreview, calloutMs } from './callouts.js?v=3.2.1-8eb03f85';
+import { sessionLayout, busyIntervals, fitTime, songPos, insertStartIn, messageMs } from './placement.js?v=3.2.1-8eb03f85';
+import { tokenFor, tokensIn, refsIn, removeToken, parseRef, TOKEN_RE } from './tokens.js?v=3.2.1-8eb03f85';
 
 // ---------------------------------------------------------------- putting a token in a message
 // At the cursor if the person has been in the message, otherwise at the end. Fires 'input' so the

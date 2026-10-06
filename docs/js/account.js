@@ -1,9 +1,9 @@
 // The account button and menu in the header (Settings, Install, Sign out), Settings → Account,
 // and for the admin: Spotify access requests.
-import { $, h, toast } from './util.js?v=3.2-3eb3c514';
-import { app } from './app.js?v=3.2-3eb3c514';
-import { cloud, signOut, syncAll, setRequestStatus, refreshPeople } from './cloud.js?v=3.2-3eb3c514';
-import { installButton, isInstalled } from './pwa.js?v=3.2-3eb3c514';
+import { $, h, toast } from './util.js?v=3.2.1-8eb03f85';
+import { app } from './app.js?v=3.2.1-8eb03f85';
+import { cloud, signOut, syncAll, setRequestStatus, refreshPeople } from './cloud.js?v=3.2.1-8eb03f85';
+import { installButton, isInstalled } from './pwa.js?v=3.2.1-8eb03f85';
 
 let isRunning = () => false;
 

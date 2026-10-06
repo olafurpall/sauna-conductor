@@ -1,13 +1,13 @@
 // The Callouts page (admin only): set up callout profiles, one per person who recorded callouts,
 // and the clips for each callout. A profile can be published (chosen by everyone for their sessions)
 // once the admin confirms the person agreed to their recordings being used.
-import { $, h, toast } from './util.js?v=3.2-3eb3c514';
-import { app } from './app.js?v=3.2-3eb3c514';
-import { cloud } from './cloud.js?v=3.2-3eb3c514';
-import { LANGS } from './script.js?v=3.2-3eb3c514';
-import { chooseRecording } from './recorder.js?v=3.2-3eb3c514';
-import { tokenFor } from './tokens.js?v=3.2-3eb3c514';
-import { callouts, CATALOG, labelOf, catalogOf, suggestedLine, slugKey, KEY_RE, uuid4, loadProfiles, saveProfile, deleteProfile, addClip, updateClip, deleteClip, playClip } from './callouts.js?v=3.2-3eb3c514';
+import { $, h, toast } from './util.js?v=3.2.1-8eb03f85';
+import { app } from './app.js?v=3.2.1-8eb03f85';
+import { cloud } from './cloud.js?v=3.2.1-8eb03f85';
+import { LANGS } from './script.js?v=3.2.1-8eb03f85';
+import { chooseRecording } from './recorder.js?v=3.2.1-8eb03f85';
+import { tokenFor } from './tokens.js?v=3.2.1-8eb03f85';
+import { callouts, CATALOG, labelOf, catalogOf, suggestedLine, slugKey, KEY_RE, uuid4, loadProfiles, saveProfile, deleteProfile, addClip, updateClip, deleteClip, playClip } from './callouts.js?v=3.2.1-8eb03f85';
 
 const el = $('#view-callouts');
 let selId = null;

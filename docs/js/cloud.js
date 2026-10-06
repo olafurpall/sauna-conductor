@@ -2,11 +2,11 @@
 // narration, run history, play counts and your Spotify login.
 // A session can be shared by invite (collaborator or viewer) or by a link (viewer).
 // The browser's own storage stays the working copy, so everything keeps working offline.
-import { SUPABASE_URL, SUPABASE_KEY } from './config.js?v=3.2-3eb3c514';
-import { app } from './app.js?v=3.2-3eb3c514';
-import { store, log, toast, sleep } from './util.js?v=3.2-3eb3c514';
-import * as db from './db.js?v=3.2-3eb3c514';
-import { countsAsPlay } from './sessions.js?v=3.2-3eb3c514';
+import { SUPABASE_URL, SUPABASE_KEY } from './config.js?v=3.2.1-8eb03f85';
+import { app } from './app.js?v=3.2.1-8eb03f85';
+import { store, log, toast, sleep } from './util.js?v=3.2.1-8eb03f85';
+import * as db from './db.js?v=3.2.1-8eb03f85';
+import { countsAsPlay } from './sessions.js?v=3.2.1-8eb03f85';
 
 const Q = { quiet: true };            // local writes made by sync must not trigger another upload
 const BUCKET = 'clips';
@@ -125,7 +125,7 @@ export async function initCloud() {
 
   window.addEventListener('focus', () => { if (cloud.ws && Date.now() - cloud.lastSync > 30000) syncAll(); });
   window.addEventListener('online', () => { if (cloud.ws) syncAll(); });
-  setInterval(() => { if (cloud.ws && document.visibilityState === 'visible' && !cloud.isRunning()) syncAll(); }, 120000);
+  setInterval(() => { if (cloud.ws && !cloud.dormant && document.visibilityState === 'visible' && !cloud.isRunning()) syncAll(); }, 120000);
 }
 
 export async function signInWithGoogle() {

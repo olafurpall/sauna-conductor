@@ -1,7 +1,7 @@
 // Share a session as a link (Facebook, Instagram stories, messages…). Whoever opens it signs in,
 // connects Spotify, and then gets the session as a viewer: they can run it but not change it.
-import { h, toast } from './util.js?v=3.2-3eb3c514';
-import { cloud, getLink, createLink, revokeLink, linkUrl, listShares, canEdit } from './cloud.js?v=3.2-3eb3c514';
+import { h, toast } from './util.js?v=3.2.1-8eb03f85';
+import { cloud, getLink, createLink, revokeLink, linkUrl, listShares, canEdit } from './cloud.js?v=3.2.1-8eb03f85';
 
 export async function openLinkDialog(s) {
   if (!cloud.signedIn) { toast('Sign in first.'); return; }
